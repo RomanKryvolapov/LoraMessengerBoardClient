@@ -1,1 +1,1 @@
-# Arduino
+This project allows you to communicate through Ebyte's Lora E22 modules using a smartphone with Bluetooth and ESP32
