@@ -105,7 +105,7 @@ uint8_t loraCurrentPower = TP_MAX; // 1/2/3/4
 uint16_t loraCurrentEncryptionKey = 0x0000; // 0-65535, must be the same for 2 modules
 uint16_t loraCurrentAddress = 0xFFFF; // 0-65535, address 65535 is used for broadcast messages. With this address, the module will receive all messages, and messages sent from this module will be accepted by all other modules, regardless of the address settings on them.
 uint8_t loraCurrentNetID = 0x00; // 0-255, must be the same for 2 modules
-uint8_t memoryForSavingSettingsToTheModule = TEMPORARY; // PERMANENT/PERMANENT
+uint8_t memoryForSavingSettingsToTheModule = TEMPORARY; // TEMPORARY/PERMANENT
 
 String textToSend = "";
 String textLastSend = "";
