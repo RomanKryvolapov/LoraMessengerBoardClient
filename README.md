@@ -15,10 +15,10 @@
 <p>Commands:</p>
 <p>Send ... (some text)</p>
 <p>Channel ... (E22-400T30D: 0-83, Frequency 410.125 + CH*1M E22-900T30D: 0-80, Frequency 850.125 + CH*1M E22-230T30D: 0-83, Frequency 220.125 + CH*0.25M)</p>
-<p>Rate ... (300/1200/2400/4800/9600/19200/38400/62500)</p>
-<p>Packet ... (32/64/128/240)</p>
-<p>Reset</p>
-<p>Power ... (1/2/3/4)</p>
-<p>Key ... (0-65535)</p>
-<p>NetID ... (0-255)</p>
+<p>Rate ... (300/1200/2400/4800/9600/19200/38400/62500, 62500 = 62.5kbs)</p>
+<p>Packet ... (32/64/128/240, packet size in bytes)</p>
+<p>Power ... (1/2/3/4, E22-...T30D: 21dbm/24dbm/27dbm/30dbm, E22-...T22D: 10dbm/13dbm/17dbm/22dbm)</p>
+<p>Key ... (0-65535, encryption key, must be the same for 2 modules)</p>
+<p>NetID ... (0-255, must be the same for 2 modules)</p>
 <p>Address ... (0-655350-65535, address 65535 is used for broadcast messages. With this address, the module will receive all messages, and messages sent from this module will be accepted by all other modules, regardless of the address settings on them.)</p>
+<p>Reset</p>
