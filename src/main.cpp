@@ -8,16 +8,18 @@
 #include <Adafruit_ST7735.h>
 #include <Adafruit_ST7789.h>
 
-// Display (size 10 x 20 symbols)
+// Pins valid for ESP32 DEVKIT V1
+
+// Display pins, I use 320x240 2 inch
 #define TFT_CS 5
 #define TFT_RST 4
 #define TFT_DC 2
 
-// I2C
+// I2C pins, if you want to use i2c display
 //#define I2C_SDA 21
 //#define I2C_SCL 22
 
-// Lora
+// Lora pins
 #define PIN_TX 17
 #define PIN_RX 16
 #define PIN_M0 14
@@ -42,6 +44,8 @@ const char PROGMEM COMMAND_KEY[] = "Key ";
 const char PROGMEM COMMAND_NET_ID[] = "NetID ";
 const char PROGMEM COMMAND_ADDRESS[] = "Address ";
 
+const char PROGMEM COMMANDS_ALL[] = "Commands:\nSend ... (some text)\nChannel ... (0-83)\nRate ... (300/1200/2400/4800/9600/19200/38400/62500)\nPacket ... (32/64/128/240)\nReset\nPower ... (1/2/3/4)\nKey ... (0-65535)\nNetID ... (0-255)\nAddress ... (0-65535)";
+
 const char PROGMEM ERROR_CHANNEL[] = "Must be 0-83";
 const char PROGMEM ERROR_AIR_RATE[] = "Must be 300/1200/2400/4800/9600/19200/38400/62500";
 const char PROGMEM ERROR_PACKET_SIZE[] = "Must be 32/64/128/240";
@@ -58,42 +62,43 @@ const char ADDRESS_KEY[] = "KEY";
 const char ADDRESS_NET_ID[] = "NET_ID";
 const char ADDRESS_ADDRESS[] = "ADDRESS";
 
-const uint8_t STEP_LINE = 16;
-const uint8_t STEP_SYMBOL = 12;
+// size 320x240, 10 x 20 symbols with text size 2
+const uint8_t DISPLAY_STEP_LINE = 16;
+const uint8_t DISPLAY_STEP_SYMBOL = 12;
 
 const uint32_t UPDATE_DISPLAY_DELAY = 100;
 const uint32_t UPDATE_SYSTEM_DELAY = 0;
-const uint32_t taskSystemProcessesStack = 50000;
-const uint32_t taskUpdateDisplayStack = 50000;
-const uint32_t updateAmbientDelay = 5000;
+const uint32_t TASK_SYSTEM_PROCESSES_STACK = 50000;
+const uint32_t TASK_UPDATE_DISPLAY_STACK = 50000;
 
-bool loraIsBusy = false;
+const uint32_t LORA_UPDATE_AMBIENT_DELAY = 5000; // If this happens frequently, the module will not work consistently, because the connection to the module is used to get the value.
+
+bool loraIsBusy = false; // This value can be updated frequently as it checks the status of the pin, the connection to the module is not used
+
+uint8_t currentChannel = 40; // 0-83
+uint8_t currentAirDataRate = ADR_2400; // 300/1200/2400/4800/9600/19200/38400/62500
+uint8_t currentPacketSize = PACKET240; // 32/64/128/240
+uint8_t currentUartSpeed = UBR_9600; // 1200/2400/4800/9600/19200/38400/57600/115200 but stable at speed 9600
+uint16_t currentUartSerialSpeed = 9600; // 1200/2400/4800/9600/19200/38400/57600/115200 but stable at speed 9600
+uint8_t currentPower = TP_MAX; // 1/2/3/4
+uint16_t currentKey = 0x0000; // 0-65535
+uint16_t currentAddress = 0x0000; // 0-65535
+uint8_t currentNetID = 0x00; // 0-255
 
 String textToSend = "";
-String lastSend = "";
+String textLastSend = "";
 String textReceived = "";
 uint32_t timeCodeReceived = 0;
-
+uint32_t timeCodeUpdateAmbient = 0;
 uint8_t loraRssiLastReceive = 0;
 uint8_t loraRssiAmbient = 0;
 
-uint8_t currentChannel = 40;
-uint8_t currentAirDataRate = ADR_2400;
-uint8_t currentPacketSize = PACKET240;
-uint8_t currentUartSpeed = UBR_9600;
-uint16_t currentUartSerialSpeed = 9600;
-uint8_t currentPower = TP_MAX;
-uint16_t currentKey = 0x0000;
-uint16_t currentAddress = 0x0000;
-uint8_t currentNetID = 0x00;
-uint32_t updateAmbientTimeCode = 0;
-
 uint16_t getLine(uint8_t numberOfLine) {
-    return numberOfLine * STEP_LINE;
+    return numberOfLine * DISPLAY_STEP_LINE;
 }
 
 uint8_t getSymbol(uint8_t numberOfSymbol) {
-    return numberOfSymbol * STEP_SYMBOL;
+    return numberOfSymbol * DISPLAY_STEP_SYMBOL;
 }
 
 void readDataFromEEPROM() {
@@ -134,7 +139,7 @@ void printText(String text, uint8_t line, uint8_t position, uint8_t clearSymbols
             getSymbol(position),
             getLine(line),
             getSymbol(clearSymbolsX),
-            STEP_LINE * clearSymbolsY,
+            DISPLAY_STEP_LINE * clearSymbolsY,
             ST77XX_BLACK
     );
     Display.print(text);
@@ -255,19 +260,20 @@ void setupLora() {
 //    Lora.writeCryptKeyWireless(0x0128, TEMPORARY);
 }
 
+// commands will be json for mobile client
 void parseCommand(String buffer) {
     if (buffer.startsWith((__FlashStringHelper *) COMMAND_SEND)) {
         buffer.replace((__FlashStringHelper *) COMMAND_SEND, "");
         if (textToSend.isEmpty()) {
             textToSend = buffer;
             if (SerialBluetooth.connected()) {
-                SerialBluetooth.print("Text to send: ");
+                SerialBluetooth.println("Message queued for sending:");
                 SerialBluetooth.println(textToSend);
             }
         } else {
             textToSend = textToSend + "/n" + buffer;
         }
-        lastSend = textToSend;
+        textLastSend = textToSend;
         return;
     }
     if (buffer.equals((__FlashStringHelper *) COMMAND_RESET)) {
@@ -552,26 +558,19 @@ void parseCommand(String buffer) {
             }
         }
     }
+    if (SerialBluetooth.connected()) {
+        SerialBluetooth.println((__FlashStringHelper *) COMMANDS_ALL);
+        return;
+    }
 }
 
-void setupDisplay() {
-    Display.init(240, 320);
-    Display.setSPISpeed(40000000);
-    Display.setTextColor(ST77XX_WHITE);
-    Display.setRotation(2);
-    Display.setTextSize(2);
-    Display.setTextWrap(true);
-    Display.fillScreen(ST77XX_BLACK);
-    Display.setCursor(0, 0);
-    Display.println("Start");
-}
 
 void updateSystem() {
     loraIsBusy = Lora.getBusy();
     uint32_t currentTime = millis();
-    if (!loraIsBusy && currentTime > updateAmbientTimeCode + updateAmbientDelay) {
+    if (!loraIsBusy && currentTime > timeCodeUpdateAmbient + LORA_UPDATE_AMBIENT_DELAY) {
         loraRssiAmbient = Lora.getRSSI(RSSI_AMBIENT);
-        updateAmbientTimeCode = currentTime;
+        timeCodeUpdateAmbient = currentTime;
     }
     if (Lora.available() > 0) {
         textReceived = Serial1.readString();
@@ -579,7 +578,7 @@ void updateSystem() {
         timeCodeReceived = millis();
         if (SerialBluetooth.connected()) {
             SerialBluetooth.println();
-            SerialBluetooth.print("Received: ");
+            SerialBluetooth.println("Message received:");
             SerialBluetooth.println(textReceived);
             SerialBluetooth.print("RSSI received: ");
             SerialBluetooth.println(loraRssiLastReceive);
@@ -594,7 +593,7 @@ void updateSystem() {
     if (!textToSend.isEmpty() && Serial1.available()) {
         Serial1.print(textToSend);
         if (SerialBluetooth.connected()) {
-            SerialBluetooth.print("Send: ");
+            SerialBluetooth.println("The message was sent and most likely received by another device:");
             SerialBluetooth.println(textToSend);
         }
         textToSend = "";
@@ -617,6 +616,37 @@ void taskUpdateDisplay(void *pvParameters) {
     }
 }
 
+void setupTasksForESP32Cores() {
+    xTaskCreatePinnedToCore(
+            taskUpdateDisplay,
+            "taskUpdateDisplay",
+            TASK_UPDATE_DISPLAY_STACK,
+            NULL,
+            1,
+            &TaskUpdateDisplay,
+            0);
+    xTaskCreatePinnedToCore(
+            taskSystemProcesses,
+            "taskSystemProcesses",
+            TASK_SYSTEM_PROCESSES_STACK,
+            NULL,
+            1,
+            &TaskSystemProcesses,
+            1);
+}
+
+void setupDisplay() {
+    Display.init(240, 320);
+    Display.setSPISpeed(40000000);
+    Display.setTextColor(ST77XX_WHITE);
+    Display.setRotation(2);
+    Display.setTextSize(2);
+    Display.setTextWrap(true);
+    Display.fillScreen(ST77XX_BLACK);
+    Display.setCursor(0, 0);
+    Display.println("Start");
+}
+
 void setup() {
     SerialBluetooth.begin("ESP32MESSENGER");
     Serial1.begin(currentUartSerialSpeed, SERIAL_8N1, PIN_RX, PIN_TX);
@@ -626,23 +656,7 @@ void setup() {
     Lora.init();
     setupLora();
 
-    xTaskCreatePinnedToCore(
-            taskUpdateDisplay,
-            "taskUpdateDisplay",
-            taskUpdateDisplayStack,
-            NULL,
-            1,
-            &TaskUpdateDisplay,
-            0);
-    xTaskCreatePinnedToCore(
-            taskSystemProcesses,
-            "taskSystemProcesses",
-            taskSystemProcessesStack,
-            NULL,
-            1,
-            &TaskSystemProcesses,
-            1);
-
+    setupTasksForESP32Cores();
 }
 
 void loop() {
