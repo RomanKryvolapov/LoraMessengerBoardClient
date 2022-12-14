@@ -54,7 +54,7 @@ const char PROGMEM COMMAND_KEY[] = "Key ";
 const char PROGMEM COMMAND_NET_ID[] = "NetID ";
 const char PROGMEM COMMAND_ADDRESS[] = "Address ";
 
-const char PROGMEM COMMANDS_ALL[] = "Commands:\nSend ... (some text)\nChannel ... (0-83)\nRate ... (300/1200/2400/4800/9600/19200/38400/62500)\nPacket ... (32/64/128/240)\nReset\nPower ... (1/2/3/4)\nKey ... (0-65535)\nNetID ... (0-255)\nAddress ... (0-65535)\nAddress 65535 is used for broadcast messages. With this address, the module will receive all messages, and messages sent from this module will be accepted by all other modules, regardless of the address settings on them.";
+const char PROGMEM COMMANDS_ALL[] = "Commands:\nSend ... (some text)\nChannel ... (E22-400T30D: 0-83, Frequency 410.125 + CH*1M E22-900T30D: 0-80, Frequency 850.125 + CH*1M E22-230T30D: 0-83, Frequency 220.125 + CH*0.25M)\nRate ... (300/1200/2400/4800/9600/19200/38400/62500)\nPacket ... (32/64/128/240)\nReset\nPower ... (1/2/3/4)\nKey ... (0-65535)\nNetID ... (0-255)\nAddress ... (0-65535)\nAddress 65535 is used for broadcast messages. With this address, the module will receive all messages, and messages sent from this module will be accepted by all other modules, regardless of the address settings on them.";
 
 const char PROGMEM ERROR_CHANNEL[] = "Must be 0-83";
 const char PROGMEM ERROR_AIR_RATE[] = "Must be 300/1200/2400/4800/9600/19200/38400/62500";
@@ -96,7 +96,11 @@ uint8_t loraCurrentPowerSavingModeWOR = WOR_TRANSMITTER; // In this mode, one-wa
 uint8_t loraCurrentPowerSavingModeWORCycle = WOR2000;
 uint8_t loraCurrentAppendRSSItoTheEndOfReceivedDataMode = RSSI_ENABLE;
 uint8_t loraCurrentListeningToTheAirAmbientMode = RSSI_ENABLE;
-uint8_t loraCurrentChannel = 40; // 0-83
+// Channels:
+// E22-400T30D: 0-83, Frequency= 410.125 + CH*1M
+// E22-900T30D: 0-80, Frequency= 850.125 + CH*1M
+// E22-230T30D: 0-83, Frequency = 220.125 + CH*0.25M
+uint8_t loraCurrentChannel = 40;
 uint8_t loraCurrentAirDataRate = ADR_2400; // 300/1200/2400/4800/9600/19200/38400/62500
 uint8_t loraCurrentPacketSize = PACKET240; // 32/64/128/240
 uint8_t loraCurrentUartSpeed = UBR_9600; // 1200/2400/4800/9600/19200/38400/57600/115200 but stable at speed 9600, configuration only at speed 9600

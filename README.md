@@ -14,7 +14,7 @@
 
 <p>Commands:</p>
 <p>Send ... (some text)</p>
-<p>Channel ... (0-83)</p>
+<p>Channel ... (E22-400T30D: 0-83, Frequency 410.125 + CH*1M E22-900T30D: 0-80, Frequency 850.125 + CH*1M E22-230T30D: 0-83, Frequency 220.125 + CH*0.25M)</p>
 <p>Rate ... (300/1200/2400/4800/9600/19200/38400/62500)</p>
 <p>Packet ... (32/64/128/240)</p>
 <p>Reset</p>
