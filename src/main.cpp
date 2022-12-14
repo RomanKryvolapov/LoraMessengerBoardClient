@@ -8,7 +8,24 @@
 #include <Adafruit_ST7735.h>
 #include <Adafruit_ST7789.h>
 
-// Pins valid for ESP32 DEVKIT V1
+// All pins valid for ESP32 DEVKIT V1
+// You can only use the 3.3 volt levels!!!
+// To work with Arduino you need to use a level converter
+
+// Lora pins
+#define PIN_TX 17
+#define PIN_RX 16
+
+// M0:0v M1:0v Normal mode
+// M0:0v M1:3v WOR mode
+// M0:3v M1:0v Configuration mode
+// M0:3v M1:3v Sleep mode
+#define PIN_M0 14
+#define PIN_M1 12
+
+// 0v on pin: module is busy
+// 3v on pin: module is free
+#define PIN_AX 13
 
 // Display pins, I use 320x240 2 inch
 #define TFT_CS 5
@@ -18,13 +35,6 @@
 // I2C pins, if you want to use i2c display
 //#define I2C_SDA 21
 //#define I2C_SCL 22
-
-// Lora pins
-#define PIN_TX 17
-#define PIN_RX 16
-#define PIN_M0 14
-#define PIN_M1 12
-#define PIN_AX 13
 
 Adafruit_ST7789 Display = Adafruit_ST7789(TFT_CS, TFT_DC, TFT_RST);
 EBYTE22 Lora(&Serial1, PIN_M0, PIN_M1, PIN_AX);
@@ -62,6 +72,8 @@ const char ADDRESS_KEY[] = "KEY";
 const char ADDRESS_NET_ID[] = "NET_ID";
 const char ADDRESS_ADDRESS[] = "ADDRESS";
 
+const String BLUETOOTH_NAME = "ESP32MESSENGER";
+
 // size 320x240, 10 x 20 symbols with text size 2
 const uint8_t DISPLAY_STEP_LINE = 16;
 const uint8_t DISPLAY_STEP_SYMBOL = 12;
@@ -79,20 +91,20 @@ uint8_t loraCurrentMode = MODE_NORMAL;
 uint8_t loraCurrentParityBit = PB_8N1;
 uint8_t loraCurrentTransmissionMode = TXM_NORMAL;
 uint8_t loraCurrentRepeaterMode = REPEATER_DISABLE;
-uint8_t loraCurrentChannelMonitoringBeforeDataTransmissionMode = LBT_DISABLE;
-uint8_t loraCurrentPowerSavingModeWOR = WOR_TRANSMITTER;
+uint8_t loraCurrentChannelMonitoringBeforeDataTransmissionMode = LBT_DISABLE; // In this mode, the transmitter waits until the channel becomes free before sending.
+uint8_t loraCurrentPowerSavingModeWOR = WOR_TRANSMITTER; // In this mode, one-way data transmission from the transmitter to the receiver is carried out.
 uint8_t loraCurrentPowerSavingModeWORCycle = WOR2000;
 uint8_t loraCurrentAppendRSSItoTheEndOfReceivedDataMode = RSSI_ENABLE;
 uint8_t loraCurrentListeningToTheAirAmbientMode = RSSI_ENABLE;
 uint8_t loraCurrentChannel = 40; // 0-83
 uint8_t loraCurrentAirDataRate = ADR_2400; // 300/1200/2400/4800/9600/19200/38400/62500
 uint8_t loraCurrentPacketSize = PACKET240; // 32/64/128/240
-uint8_t loraCurrentUartSpeed = UBR_9600; // 1200/2400/4800/9600/19200/38400/57600/115200 but stable at speed 9600
-uint16_t esp32currentUartSerialSpeed = 9600; // 1200/2400/4800/9600/19200/38400/57600/115200 but stable at speed 9600
+uint8_t loraCurrentUartSpeed = UBR_9600; // 1200/2400/4800/9600/19200/38400/57600/115200 but stable at speed 9600, configuration only at speed 9600
+uint16_t esp32currentUartSerialSpeed = 9600; // 1200/2400/4800/9600/19200/38400/57600/115200 but stable at speed 9600, configuration only at speed 9600
 uint8_t loraCurrentPower = TP_MAX; // 1/2/3/4
-uint16_t loraCurrentEncryptionKey = 0x0000; // 0-65535
+uint16_t loraCurrentEncryptionKey = 0x0000; // 0-65535, must be the same for 2 modules
 uint16_t loraCurrentAddress = 0xFFFF; // 0-65535, address 65535 is used for broadcast messages. With this address, the module will receive all messages, and messages sent from this module will be accepted by all other modules, regardless of the address settings on them.
-uint8_t loraCurrentNetID = 0x00; // 0-255
+uint8_t loraCurrentNetID = 0x00; // 0-255, must be the same for 2 modules
 uint8_t memoryForSavingSettingsToTheModule = TEMPORARY; // PERMANENT/PERMANENT
 
 String textToSend = "";
@@ -660,7 +672,7 @@ void setupDisplay() {
 }
 
 void setup() {
-    SerialBluetooth.begin("ESP32MESSENGER");
+    SerialBluetooth.begin(BLUETOOTH_NAME);
     Serial1.begin(esp32currentUartSerialSpeed, SERIAL_8N1, PIN_RX, PIN_TX);
 
     readDataFromEEPROM();
