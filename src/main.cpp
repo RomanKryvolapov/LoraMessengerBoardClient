@@ -44,7 +44,7 @@ const char PROGMEM COMMAND_KEY[] = "Key ";
 const char PROGMEM COMMAND_NET_ID[] = "NetID ";
 const char PROGMEM COMMAND_ADDRESS[] = "Address ";
 
-const char PROGMEM COMMANDS_ALL[] = "Commands:\nSend ... (some text)\nChannel ... (0-83)\nRate ... (300/1200/2400/4800/9600/19200/38400/62500)\nPacket ... (32/64/128/240)\nReset\nPower ... (1/2/3/4)\nKey ... (0-65535)\nNetID ... (0-255)\nAddress ... (0-65535)";
+const char PROGMEM COMMANDS_ALL[] = "Commands:\nSend ... (some text)\nChannel ... (0-83)\nRate ... (300/1200/2400/4800/9600/19200/38400/62500)\nPacket ... (32/64/128/240)\nReset\nPower ... (1/2/3/4)\nKey ... (0-65535)\nNetID ... (0-255)\nAddress ... (0-65535)\nAddress 65535 is used for broadcast messages. With this address, the module will receive all messages, and messages sent from this module will be accepted by all other modules, regardless of the address settings on them.";
 
 const char PROGMEM ERROR_CHANNEL[] = "Must be 0-83";
 const char PROGMEM ERROR_AIR_RATE[] = "Must be 300/1200/2400/4800/9600/19200/38400/62500";
@@ -52,7 +52,7 @@ const char PROGMEM ERROR_PACKET_SIZE[] = "Must be 32/64/128/240";
 const char PROGMEM ERROR_POWER[] = "Must be 1/2/3/4";
 const char PROGMEM ERROR_KEY[] = "Must be 0-65535";
 const char PROGMEM ERROR_NET_ID[] = "Must be 0-255";
-const char PROGMEM ERROR_ADDRESS[] = "Must be 0-65535";
+const char PROGMEM ERROR_ADDRESS[] = "Must be 0-65535, address 65535 is used for broadcast messages. With this address, the module will receive all messages, and messages sent from this module will be accepted by all other modules, regardless of the address settings on them.";
 
 const char ADDRESS_CHANNEL[] = "CHANNEL";
 const char ADDRESS_RATE[] = "RATE";
@@ -75,15 +75,25 @@ const uint32_t LORA_UPDATE_AMBIENT_DELAY = 5000; // If this happens frequently, 
 
 bool loraIsBusy = false; // This value can be updated frequently as it checks the status of the pin, the connection to the module is not used
 
-uint8_t currentChannel = 40; // 0-83
-uint8_t currentAirDataRate = ADR_2400; // 300/1200/2400/4800/9600/19200/38400/62500
-uint8_t currentPacketSize = PACKET240; // 32/64/128/240
-uint8_t currentUartSpeed = UBR_9600; // 1200/2400/4800/9600/19200/38400/57600/115200 but stable at speed 9600
-uint16_t currentUartSerialSpeed = 9600; // 1200/2400/4800/9600/19200/38400/57600/115200 but stable at speed 9600
-uint8_t currentPower = TP_MAX; // 1/2/3/4
-uint16_t currentKey = 0x0000; // 0-65535
-uint16_t currentAddress = 0x0000; // 0-65535
-uint8_t currentNetID = 0x00; // 0-255
+uint8_t loraCurrentMode = MODE_NORMAL;
+uint8_t loraCurrentParityBit = PB_8N1;
+uint8_t loraCurrentTransmissionMode = TXM_NORMAL;
+uint8_t loraCurrentRepeaterMode = REPEATER_DISABLE;
+uint8_t loraCurrentChannelMonitoringBeforeDataTransmissionMode = LBT_DISABLE;
+uint8_t loraCurrentPowerSavingModeWOR = WOR_TRANSMITTER;
+uint8_t loraCurrentPowerSavingModeWORCycle = WOR2000;
+uint8_t loraCurrentAppendRSSItoTheEndOfReceivedDataMode = RSSI_ENABLE;
+uint8_t loraCurrentListeningToTheAirAmbientMode = RSSI_ENABLE;
+uint8_t loraCurrentChannel = 40; // 0-83
+uint8_t loraCurrentAirDataRate = ADR_2400; // 300/1200/2400/4800/9600/19200/38400/62500
+uint8_t loraCurrentPacketSize = PACKET240; // 32/64/128/240
+uint8_t loraCurrentUartSpeed = UBR_9600; // 1200/2400/4800/9600/19200/38400/57600/115200 but stable at speed 9600
+uint16_t esp32currentUartSerialSpeed = 9600; // 1200/2400/4800/9600/19200/38400/57600/115200 but stable at speed 9600
+uint8_t loraCurrentPower = TP_MAX; // 1/2/3/4
+uint16_t loraCurrentEncryptionKey = 0x0000; // 0-65535
+uint16_t loraCurrentAddress = 0xFFFF; // 0-65535, address 65535 is used for broadcast messages. With this address, the module will receive all messages, and messages sent from this module will be accepted by all other modules, regardless of the address settings on them.
+uint8_t loraCurrentNetID = 0x00; // 0-255
+uint8_t memoryForSavingSettingsToTheModule = TEMPORARY; // PERMANENT/PERMANENT
 
 String textToSend = "";
 String textLastSend = "";
@@ -92,6 +102,29 @@ uint32_t timeCodeReceived = 0;
 uint32_t timeCodeUpdateAmbient = 0;
 uint8_t loraRssiLastReceive = 0;
 uint8_t loraRssiAmbient = 0;
+
+void setupLora() {
+    Lora.setUARTBaudRate(loraCurrentUartSpeed);
+    Lora.setMode(loraCurrentMode);
+    Lora.setParityBit(loraCurrentParityBit);
+    Lora.setTransmissionMode(loraCurrentTransmissionMode);
+    Lora.setRepeater(loraCurrentRepeaterMode);
+    Lora.setLBT(loraCurrentChannelMonitoringBeforeDataTransmissionMode);
+    Lora.setWOR(loraCurrentPowerSavingModeWOR);
+    Lora.setWORCycle(loraCurrentPowerSavingModeWORCycle);
+    Lora.setRSSIInPacket(loraCurrentAppendRSSItoTheEndOfReceivedDataMode);
+    Lora.setRSSIAmbient(loraCurrentListeningToTheAirAmbientMode);
+    Lora.setTransmitPower(loraCurrentPower);
+    Lora.setChannel(loraCurrentChannel);
+    Lora.setAddress(loraCurrentAddress);
+    Lora.setNetID(loraCurrentNetID);
+    Lora.setAirDataRate(loraCurrentAirDataRate);
+    Lora.setPacketLength(loraCurrentPacketSize);
+    Lora.writeSettings(memoryForSavingSettingsToTheModule);
+    Lora.writeCryptKey(loraCurrentEncryptionKey, memoryForSavingSettingsToTheModule);
+//    Lora.writeSettingsWireless(TEMPORARY);
+//    Lora.writeCryptKeyWireless(0x0128, TEMPORARY);
+}
 
 uint16_t getLine(uint8_t numberOfLine) {
     return numberOfLine * DISPLAY_STEP_LINE;
@@ -105,31 +138,31 @@ void readDataFromEEPROM() {
     Preferences.begin("Preferences", false);
     uint16_t channel = Preferences.getUShort(ADDRESS_CHANNEL, 65535);
     if (channel != 65535) {
-        currentChannel = channel;
+        loraCurrentChannel = channel;
     }
     uint16_t airDataRate = Preferences.getUShort(ADDRESS_RATE, 65535);
     if (airDataRate != 65535) {
-        currentAirDataRate = airDataRate;
+        loraCurrentAirDataRate = airDataRate;
     }
     uint16_t packetSize = Preferences.getUShort(ADDRESS_PACKET, 65535);
     if (packetSize != 65535) {
-        currentPacketSize = packetSize;
+        loraCurrentPacketSize = packetSize;
     }
     uint16_t power = Preferences.getUShort(ADDRESS_POWER, 65535);
     if (power != 65535) {
-        currentPower = power;
+        loraCurrentPower = power;
     }
     uint32_t address = Preferences.getUInt(ADDRESS_POWER, 4294967295);
     if (address != 4294967295) {
-        currentAddress = address;
+        loraCurrentAddress = address;
     }
     uint32_t key = Preferences.getUInt(ADDRESS_KEY, 4294967295);
     if (key != 4294967295) {
-        currentKey = key;
+        loraCurrentEncryptionKey = key;
     }
     uint16_t netID = Preferences.getUShort(ADDRESS_NET_ID, 65535);
     if (netID != 65535) {
-        currentNetID = netID;
+        loraCurrentNetID = netID;
     }
 }
 
@@ -156,8 +189,8 @@ void updateDisplay() {
     }
     Display.setTextColor(ST77XX_WHITE);
     printText(String("RSSI:") + loraRssiLastReceive, 1, 0, 10, 1);
-    printText(String("Chan: ") + currentChannel, 1, 10, 10, 1);
-    switch (currentAirDataRate) {
+    printText(String("Chan: ") + loraCurrentChannel, 1, 10, 10, 1);
+    switch (loraCurrentAirDataRate) {
         case ADR_300: {
             printText("Rate:300", 2, 0, 10, 1);
             break;
@@ -191,7 +224,7 @@ void updateDisplay() {
             break;
         }
     }
-    switch (currentPacketSize) {
+    switch (loraCurrentPacketSize) {
         case PACKET240: {
             printText("Pack: 240", 2, 10, 10, 1);
             break;
@@ -210,8 +243,8 @@ void updateDisplay() {
         }
     }
     char keyHex[10] = "";
-    printText(String("Key: ") + ltoa(currentKey, keyHex, 16), 3, 0, 10, 1);
-    switch (currentPower) {
+    printText(String("Key: ") + ltoa(loraCurrentEncryptionKey, keyHex, 16), 3, 0, 10, 1);
+    switch (loraCurrentPower) {
         case TP_MAX: {
             printText("Power:Max", 3, 10, 10, 1);
             break;
@@ -230,35 +263,14 @@ void updateDisplay() {
         }
     }
     char addressHex[10] = "";
-    printText(String("Addr:") + ltoa(currentAddress, addressHex, 16), 4, 0, 10, 1);
+    printText(String("Addr:") + ltoa(loraCurrentAddress, addressHex, 16), 4, 0, 10, 1);
     char netIDHex[10] = "";
-    printText(String("NetID:") + ltoa(currentNetID, netIDHex, 16), 4, 10, 10, 1);
+    printText(String("NetID:") + ltoa(loraCurrentNetID, netIDHex, 16), 4, 10, 10, 1);
     printText(String(timeCodeReceived), 5, 0, 20, 1);
     printText(textReceived, 6, 0, 20, 14);
 }
 
-void setupLora() {
-    Lora.setUARTBaudRate(currentUartSpeed);
-    Lora.setMode(MODE_NORMAL);
-    Lora.setParityBit(PB_8N1);
-    Lora.setTransmissionMode(TXM_NORMAL);
-    Lora.setRepeater(REPEATER_DISABLE);
-    Lora.setLBT(LBT_DISABLE);
-    Lora.setWOR(WOR_TRANSMITTER);
-    Lora.setWORCycle(WOR2000);
-    Lora.setRSSIInPacket(RSSI_ENABLE);
-    Lora.setRSSIAmbient(RSSI_ENABLE);
-    Lora.setTransmitPower(currentPower);
-    Lora.setChannel(currentChannel);
-    Lora.setAddress(currentAddress);
-    Lora.setNetID(currentNetID);
-    Lora.setAirDataRate(currentAirDataRate);
-    Lora.setPacketLength(currentPacketSize);
-    Lora.writeSettings(TEMPORARY);
-    Lora.writeCryptKey(currentKey, TEMPORARY);
-//    Lora.writeSettingsWireless(TEMPORARY);
-//    Lora.writeCryptKeyWireless(0x0128, TEMPORARY);
-}
+
 
 // commands will be json for mobile client
 void parseCommand(String buffer) {
@@ -278,13 +290,13 @@ void parseCommand(String buffer) {
     }
     if (buffer.equals((__FlashStringHelper *) COMMAND_RESET)) {
         Preferences.clear();
-        currentChannel = 40;
-        currentAirDataRate = ADR_300;
-        currentPacketSize = PACKET32;
-        currentPower = TP_MAX;
-        currentKey = 128;
-        currentAddress = 0;
-        currentNetID = 0;
+        loraCurrentChannel = 40;
+        loraCurrentAirDataRate = ADR_300;
+        loraCurrentPacketSize = PACKET32;
+        loraCurrentPower = TP_MAX;
+        loraCurrentEncryptionKey = 128;
+        loraCurrentAddress = 0;
+        loraCurrentNetID = 0;
         setupLora();
         if (SerialBluetooth.connected()) {
             SerialBluetooth.println((__FlashStringHelper *) READY);
@@ -295,7 +307,7 @@ void parseCommand(String buffer) {
         buffer.replace((__FlashStringHelper *) COMMAND_NET_ID, "");
         uint8_t netID = buffer.toInt();
         if (netID >= 0 && netID <= 255) {
-            currentNetID = netID;
+            loraCurrentNetID = netID;
             Lora.setNetID(netID);
             Lora.writeSettings(TEMPORARY);
             Preferences.putUShort(ADDRESS_NET_ID, netID);
@@ -313,7 +325,7 @@ void parseCommand(String buffer) {
         buffer.replace((__FlashStringHelper *) COMMAND_ADDRESS, "");
         uint16_t address = buffer.toInt();
         if (address >= 0 && address <= 65535) {
-            currentAddress = address;
+            loraCurrentAddress = address;
             Lora.setAddress(address);
             Lora.writeSettings(TEMPORARY);
             Preferences.putUShort(ADDRESS_ADDRESS, address);
@@ -331,7 +343,7 @@ void parseCommand(String buffer) {
         buffer.replace((__FlashStringHelper *) COMMAND_KEY, "");
         uint16_t key = buffer.toInt();
         if (key >= 0 && key <= 65535) {
-            currentKey = key;
+            loraCurrentEncryptionKey = key;
             Lora.writeCryptKey(key, TEMPORARY);
             Preferences.putUInt(ADDRESS_KEY, key);
             if (SerialBluetooth.connected()) {
@@ -349,7 +361,7 @@ void parseCommand(String buffer) {
         uint8_t power = buffer.toInt();
         switch (power) {
             case 1: {
-                currentPower = TP_LOW;
+                loraCurrentPower = TP_LOW;
                 Lora.setTransmitPower(TP_LOW);
                 Lora.writeSettings(TEMPORARY);
                 Preferences.putUShort(ADDRESS_POWER, TP_LOW);
@@ -359,7 +371,7 @@ void parseCommand(String buffer) {
                 return;
             }
             case 2: {
-                currentPower = TP_MID;
+                loraCurrentPower = TP_MID;
                 Lora.setTransmitPower(TP_MID);
                 Lora.writeSettings(TEMPORARY);
                 Preferences.putUShort(ADDRESS_POWER, TP_MID);
@@ -369,7 +381,7 @@ void parseCommand(String buffer) {
                 return;
             }
             case 3: {
-                currentPower = TP_HIGH;
+                loraCurrentPower = TP_HIGH;
                 Lora.setTransmitPower(TP_HIGH);
                 Lora.writeSettings(TEMPORARY);
                 Preferences.putUShort(ADDRESS_POWER, TP_HIGH);
@@ -379,7 +391,7 @@ void parseCommand(String buffer) {
                 return;
             }
             case 4: {
-                currentPower = TP_MAX;
+                loraCurrentPower = TP_MAX;
                 Lora.setTransmitPower(TP_MAX);
                 Lora.writeSettings(TEMPORARY);
                 Preferences.putUShort(ADDRESS_POWER, TP_MAX);
@@ -401,7 +413,7 @@ void parseCommand(String buffer) {
         uint8_t packet = buffer.toInt();
         switch (packet) {
             case 32: {
-                currentPacketSize = PACKET32;
+                loraCurrentPacketSize = PACKET32;
                 Lora.setPacketLength(PACKET32);
                 Lora.writeSettings(TEMPORARY);
                 Preferences.putUShort(ADDRESS_PACKET, PACKET32);
@@ -411,7 +423,7 @@ void parseCommand(String buffer) {
                 return;
             }
             case 64: {
-                currentPacketSize = PACKET64;
+                loraCurrentPacketSize = PACKET64;
                 Lora.setPacketLength(PACKET64);
                 Lora.writeSettings(TEMPORARY);
                 Preferences.putUShort(ADDRESS_PACKET, PACKET64);
@@ -421,7 +433,7 @@ void parseCommand(String buffer) {
                 return;
             }
             case 128: {
-                currentPacketSize = PACKET128;
+                loraCurrentPacketSize = PACKET128;
                 Lora.setPacketLength(PACKET128);
                 Lora.writeSettings(TEMPORARY);
                 Preferences.putUShort(ADDRESS_PACKET, PACKET128);
@@ -431,7 +443,7 @@ void parseCommand(String buffer) {
                 return;
             }
             case 240: {
-                currentPacketSize = PACKET240;
+                loraCurrentPacketSize = PACKET240;
                 Lora.setPacketLength(PACKET240);
                 Lora.writeSettings(TEMPORARY);
                 Preferences.putUShort(ADDRESS_PACKET, PACKET240);
@@ -452,7 +464,7 @@ void parseCommand(String buffer) {
         buffer.replace((__FlashStringHelper *) COMMAND_CHANNEL, "");
         uint8_t channel = buffer.toInt();
         if (channel >= 0 && channel <= 83) {
-            currentChannel = channel;
+            loraCurrentChannel = channel;
             Lora.setChannel(channel);
             Lora.writeSettings(TEMPORARY);
             Preferences.putUShort(ADDRESS_CHANNEL, channel);
@@ -471,7 +483,7 @@ void parseCommand(String buffer) {
         int rate = buffer.toInt();
         switch (rate) {
             case 300: {
-                currentAirDataRate = ADR_300;
+                loraCurrentAirDataRate = ADR_300;
                 Lora.setAirDataRate(ADR_300);
                 Lora.writeSettings(TEMPORARY);
                 Preferences.putUShort(ADDRESS_RATE, ADR_300);
@@ -481,7 +493,7 @@ void parseCommand(String buffer) {
                 return;
             }
             case 1200: {
-                currentAirDataRate = ADR_1200;
+                loraCurrentAirDataRate = ADR_1200;
                 Lora.setAirDataRate(ADR_1200);
                 Lora.writeSettings(TEMPORARY);
                 Preferences.putUShort(ADDRESS_RATE, ADR_1200);
@@ -491,7 +503,7 @@ void parseCommand(String buffer) {
                 return;
             }
             case 2400: {
-                currentAirDataRate = ADR_2400;
+                loraCurrentAirDataRate = ADR_2400;
                 Lora.setAirDataRate(ADR_2400);
                 Lora.writeSettings(TEMPORARY);
                 Preferences.putUShort(ADDRESS_RATE, ADR_2400);
@@ -501,7 +513,7 @@ void parseCommand(String buffer) {
                 return;
             }
             case 4800: {
-                currentAirDataRate = ADR_4800;
+                loraCurrentAirDataRate = ADR_4800;
                 Lora.setAirDataRate(ADR_4800);
                 Lora.writeSettings(TEMPORARY);
                 Preferences.putUShort(ADDRESS_RATE, ADR_4800);
@@ -511,7 +523,7 @@ void parseCommand(String buffer) {
                 return;
             }
             case 9600: {
-                currentAirDataRate = ADR_9600;
+                loraCurrentAirDataRate = ADR_9600;
                 Lora.setAirDataRate(ADR_9600);
                 Lora.writeSettings(TEMPORARY);
                 Preferences.putUShort(ADDRESS_RATE, ADR_9600);
@@ -521,7 +533,7 @@ void parseCommand(String buffer) {
                 return;
             }
             case 19200: {
-                currentAirDataRate = ADR_19200;
+                loraCurrentAirDataRate = ADR_19200;
                 Lora.setAirDataRate(ADR_19200);
                 Lora.writeSettings(TEMPORARY);
                 Preferences.putUShort(ADDRESS_RATE, ADR_19200);
@@ -531,7 +543,7 @@ void parseCommand(String buffer) {
                 return;
             }
             case 38400: {
-                currentAirDataRate = ADR_38400;
+                loraCurrentAirDataRate = ADR_38400;
                 Lora.setAirDataRate(ADR_38400);
                 Lora.writeSettings(TEMPORARY);
                 Preferences.putUShort(ADDRESS_RATE, ADR_38400);
@@ -541,7 +553,7 @@ void parseCommand(String buffer) {
                 return;
             }
             case 62500: {
-                currentAirDataRate = ADR_62500;
+                loraCurrentAirDataRate = ADR_62500;
                 Lora.setAirDataRate(ADR_62500);
                 Lora.writeSettings(TEMPORARY);
                 Preferences.putUShort(ADDRESS_RATE, ADR_62500);
@@ -649,7 +661,7 @@ void setupDisplay() {
 
 void setup() {
     SerialBluetooth.begin("ESP32MESSENGER");
-    Serial1.begin(currentUartSerialSpeed, SERIAL_8N1, PIN_RX, PIN_TX);
+    Serial1.begin(esp32currentUartSerialSpeed, SERIAL_8N1, PIN_RX, PIN_TX);
 
     readDataFromEEPROM();
     setupDisplay();

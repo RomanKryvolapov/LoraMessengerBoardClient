@@ -21,4 +21,4 @@
 <p>Power ... (1/2/3/4)</p>
 <p>Key ... (0-65535)</p>
 <p>NetID ... (0-255)</p>
-<p>Address ... (0-65535)</p>
+<p>Address ... (0-655350-65535, address 65535 is used for broadcast messages. With this address, the module will receive all messages, and messages sent from this module will be accepted by all other modules, regardless of the address settings on them.)</p>
