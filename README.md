@@ -8,6 +8,10 @@
 <p>I used a 320x240 screen to display the parameters of the module and incoming messages, but it is possible to use any screen with an interface I2C/SPI. In the future, I want to connect a keyboard to board so that I can make a menu for settings and so that I can send messages without using a smartphone.</p>
 <p>Currently working with modules produced by Ebyte 400MHz / 900MHz / 230MHz / 170MHz, because they are among the best in range and at the same time they are cheap. In the future, there will be compatibility with modules from other manufacturers.</p>
 <p>Made with CLion / Platformio.</p>
+<h3>Client for Android.</h3>
+
+https://github.com/RomanKryvolapov/LoraMessengerAndroidClient
+
 <h3>Following commands are currently supported:</h3>
 <h4>SetChannel:...</h4>
 <p>E22-400T30D 400mhz: 0-83, Frequency= 410.125 + CH*1M</p>
