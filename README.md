@@ -58,6 +58,8 @@
 
 https://platformio.org/
 
+https://en.wikipedia.org/wiki/ESP32
+
 https://www.ebyte.com/en/product-class.html
 
 ![Device 1!](https://github.com/RomanKryvolapov/LoraMessenger/blob/main/IMG_20221214_230954.jpg "Device 1")
