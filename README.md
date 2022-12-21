@@ -58,6 +58,9 @@
 
 ![Device 1!](https://github.com/RomanKryvolapov/LoraMessenger/blob/main/IMG_20221214_230954.jpg "Device 1")
 
-![Device 2!](https://github.com/RomanKryvolapov/LoraMessenger/blob/main/IMG_20221214_231034.jpg?raw=true "Device 2")
+![Device 2!](https://github.com/RomanKryvolapov/LoraMessenger/blob/main/IMG_20221214_231034.jpg "Device 2")
+
+![Device 3!](https://raw.githubusercontent.com/RomanKryvolapov/LoraMessengerESP32Client/main/ESP32.png "Device 3")
+
 
 
