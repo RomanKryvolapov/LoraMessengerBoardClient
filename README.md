@@ -1,5 +1,6 @@
 <h3>Lora Messenger</h2>
-![Lora!](https://raw.githubusercontent.com/RomanKryvolapov/LoraMessengerESP32Client/main/lora_logo.jpg "Lora")
+
+![Lora_logo!](https://raw.githubusercontent.com/RomanKryvolapov/LoraMessengerESP32Client/main/lora_logo.jpg "Lora_logo")
 
 <p>This project is for people who currently do not have access to the Internet and mobile network, but who want to stay connected with other people who have this device.</p>
 <p>This project allows you to communicate through Lora modules (cost about 3-10 euros) using a smartphone or computer supported Bluetooth Serial Port, and ESP32 (board with 2x core processor, WI-FI and Bluetooth, compatible with the Platformio development environment, cost about 3 euros) or ESP8266 or any other board  with Bluetooth, supported by the Platformio development environment https://platformio.org/</p>
