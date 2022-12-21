@@ -1,4 +1,4 @@
-<h3>Lora Messenger</h2>
+<h1>Lora Messenger</h1>
 
 ![Lora_logo!](https://raw.githubusercontent.com/RomanKryvolapov/LoraMessengerESP32Client/main/lora_logo.jpg "Lora_logo")
 
