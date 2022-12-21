@@ -1,9 +1,6 @@
 <h1>Lora Messenger</h1>
-
-![Lora_logo!](https://raw.githubusercontent.com/RomanKryvolapov/LoraMessengerESP32Client/main/lora_logo.jpg "Lora_logo")
-
 <p>This project is for people who currently do not have access to the Internet and mobile network, but who want to stay connected with other people who have this device.</p>
-<p>This project allows you to communicate through Lora modules (cost about 3-10 euros) using a smartphone or computer supported Bluetooth Serial Port, and ESP32 (board with 2x core processor, WI-FI and Bluetooth, compatible with the Platformio development environment, cost about 3 euros) or ESP8266 or any other board  with Bluetooth, supported by the Platformio development environment https://platformio.org/</p>
+<p>This project allows you to communicate through Lora modules (cost about 3-10 euros) using a smartphone or computer supported Bluetooth Serial Port, and ESP32 (board with 2x core processor, WI-FI and Bluetooth, compatible with the Platformio development environment, cost about 3 euros) or ESP8266 or any other board  with Bluetooth, supported by the Platformio development environment.</p>
 <p>I tested the range in urban conditions, and I was able to establish communication from different parts of the city with a module located at a distance of 8-12 kilometers at the level of the 4th floor outside the line of sight, this indicates a good potential for communication range.</p>
 <p>It is possible to communicate with device using commands via a Bluetooth Serial Port, and you can use Bluetooth Serial Port application such as the Serial Bluetooth Terminal application for Android or YAT for Windows. Below is a list of supported commands, it will be updated. Commands need to be sent as normal text messages through the terminal, you will receive responses to them in the form of messages.</p>
 <p>Simultaneously with this project, I am also making a mobile client for Android, in which the interaction will be similar to a messenger as Telegram or WhatsApp.</p>
@@ -59,11 +56,17 @@
 <h4>ResetSettings (reset to default settings, saved settings are also erased)</h4>
 <h4>PrintCommands (Print all available commands)</h4>
 
+https://platformio.org/
+
+https://www.ebyte.com/en/product-class.html
+
 ![Device 1!](https://github.com/RomanKryvolapov/LoraMessenger/blob/main/IMG_20221214_230954.jpg "Device 1")
 
 ![Device 2!](https://github.com/RomanKryvolapov/LoraMessenger/blob/main/IMG_20221214_231034.jpg "Device 2")
 
 ![Device 3!](https://raw.githubusercontent.com/RomanKryvolapov/LoraMessengerESP32Client/main/ESP32.png "Device 3")
+
+![Lora_logo!](https://raw.githubusercontent.com/RomanKryvolapov/LoraMessengerESP32Client/main/lora_logo.jpg "Lora_logo" )
 
 
 
