@@ -7,6 +7,7 @@
 <p>But, my idea is that if you do not have access to a smartphone, but have access to any device that supports Bluetooth Serial port, you can still make settings and receive and send messages in command line communication mode. This is the reason why I do not want to organize communication between board and the smartphone using JSON and Bluetooth Low Energy.</p>
 <p>I used a 320x240 screen to display the parameters of the module and incoming messages, but it is possible to use any screen with an interface I2C/SPI. In the future, I want to connect a keyboard to board so that I can make a menu for settings and so that I can send messages without using a smartphone.</p>
 <p>Currently working with modules produced by Ebyte 400MHz / 900MHz / 230MHz / 170MHz, because they are among the best in range and at the same time they are cheap. In the future, there will be compatibility with modules from other manufacturers.</p>
+<p>I used a module with a uart interface, it contains an additional STM controller that converts UART to SPI and helps in setting up the module. In the future, I want to add support for modules with a SPI interface.</p>
 <p>Made with CLion / Platformio.</p>
 <h3>Client for Android:</h3>
 
