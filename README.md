@@ -8,6 +8,7 @@
 <p>I used a 320x240 screen to display the parameters of the module and incoming messages, but it is possible to use any screen with an interface I2C/SPI. In the future, I want to connect a keyboard to board so that I can make a menu for settings and so that I can send messages without using a smartphone.</p>
 <p>Currently working with modules produced by Ebyte 400MHz / 900MHz / 230MHz / 170MHz, because they are among the best in range and at the same time they are cheap. In the future, there will be compatibility with modules from other manufacturers.</p>
 <p>I used a module with a uart interface, it contains an additional STM controller that converts UART to SPI and helps in setting up the module. In the future, I want to add support for modules with a SPI interface.</p>
+<p>In the future, a protocol will be added for private messages, group chats, and also for retranslation messages, which will expand the coverage area (I do not want to use native Lora retranslation, because it is limited in capabilities).</p>
 <p>Made with CLion / Platformio.</p>
 <h3>Client for Android:</h3>
 
