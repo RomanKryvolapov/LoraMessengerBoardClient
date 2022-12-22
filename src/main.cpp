@@ -7,6 +7,8 @@
 #include <Preferences.h>
 #include <Adafruit_ST7735.h>
 #include <Adafruit_ST7789.h>
+#include <deque>
+using namespace std;
 
 // All pins valid for ESP32 DEVKIT V1
 // You can only use the 3.3 volt levels!!!
@@ -40,8 +42,8 @@ Adafruit_ST7789 Display = Adafruit_ST7789(TFT_CS, TFT_DC, TFT_RST);
 EBYTE22 Lora(&Serial1, PIN_M0, PIN_M1, PIN_AX);
 BluetoothSerial SerialBluetooth;
 Preferences Preferences;
-TaskHandle_t TaskUpdateDisplay;
-TaskHandle_t TaskSystemProcesses;
+TaskHandle_t TaskMessageProcessing;
+TaskHandle_t TaskMessageQueues;
 
 const char PROGMEM MESSAGE_READY[] = "Ready";
 const char PROGMEM MESSAGE_ERROR[] = "Error";
@@ -51,8 +53,9 @@ const char PROGMEM MESSAGE_SERIAL_IN_WORK_MODE[] = "Setup serial port in work mo
 const char PROGMEM COMMAND_RESET_LORA_SETTINGS[] = "ResetSettings";
 const char PROGMEM COMMAND_GET_LORA_SETTINGS[] = "GetSettings";
 const char PROGMEM COMMAND_PRINT_COMMANDS[] = "PrintCommands";
-const char PROGMEM COMMAND_FREE_PREFERENCES_ENTRIES[] = "PrintFreePreferencesEntries";
+const char PROGMEM COMMAND_GET_FREE_PREFERENCES_ENTRIES[] = "GetFreePreferencesEntries";
 
+const char PROGMEM COMMAND_SEND_MESSAGE[] = "SendMessage:";
 const char PROGMEM COMMAND_SET_LORA_CHANNEL[] = "SetChannel:";
 const char PROGMEM COMMAND_SET_LORA_AIR_SPEED[] = "SetAirSpeed:";
 const char PROGMEM COMMAND_SET_LORA_SERIAL_SPEED[] = "SetSerialSpeed:";
@@ -61,6 +64,8 @@ const char PROGMEM COMMAND_SET_LORA_POWER[] = "SetPower:";
 const char PROGMEM COMMAND_SET_LORA_KEY[] = "SetKey:";
 const char PROGMEM COMMAND_SET_LORA_NET_ID[] = "SetNetID:";
 const char PROGMEM COMMAND_SET_LORA_ADDRESS[] = "SetAddress:";
+const char PROGMEM COMMAND_SET_BLUETOOTH_NAME[] = "SetBluetoothName:";
+const char PROGMEM COMMAND_SET_BLUETOOTH_PIN[] = "SetBluetoothPin:";
 
 const char PROGMEM COMMAND_GET_LORA_CHANNEL[] = "GetChannel";
 const char PROGMEM COMMAND_GET_LORA_AIR_SPEED[] = "GetAirSpeed";
@@ -103,6 +108,7 @@ const char PROGMEM COMMAND_GET_RETURN_VALUE_LORA_RSSI_TO_THE_END_OF_RECEIVED_DAT
 const char PROGMEM COMMAND_GET_RETURN_VALUE_LORA_LISTENING_TO_AIR_AMBIENT_MODE[] = "GetListeningToAirAmbientMode:";
 const char PROGMEM COMMAND_GET_RETURN_VALUE_LORA_SAVING_SETTINGS_MEMORY[] = "GetSavingSettingsMemory:";
 const char PROGMEM COMMAND_GET_RETURN_VALUE_BOARD_FREE_RAM_MEMORY[] = "GetFreeRamMemory:";
+const char PROGMEM COMMAND_GET_RETURN_VALUE_FREE_PREFERENCES_ENTRIES[] = "GetFreePreferencesEntries:";
 
 const char PROGMEM MESSAGE_LORA_RSSI_AMBIENT[] = "RSSI ambient: ";
 const char PROGMEM MESSAGE_LORA_MESSAGE_RECEIVED[] = "Message received: ";
@@ -137,13 +143,9 @@ const char KEY_PREFERENCES[] = "preferences";
 const String BLUETOOTH_NAME = "ESP32MESSENGER";
 
 // size 320x240, 10 x 20 symbols with text size 2
-const uint8_t DISPLAY_STEP_LINE = 16;
-const uint8_t DISPLAY_STEP_SYMBOL = 12;
+const uint8_t DISPLAY_STEP_LINE = 8;
+const uint8_t DISPLAY_STEP_SYMBOL = 6;
 
-const uint32_t UPDATE_DISPLAY_DELAY = 100;
-const uint32_t UPDATE_SYSTEM_DELAY = 0;
-const uint32_t TASK_SYSTEM_PROCESSES_STACK = 50000;
-const uint32_t TASK_UPDATE_DISPLAY_STACK = 50000;
 const uint32_t defaultPreferencesValue = 4294967295;
 const uint32_t uartSpeedInSetupMode = 9600;
 
@@ -188,19 +190,21 @@ uint8_t loraCurrentNetIDIndex = 0x00;
 // TEMPORARY/PERMANENT memory
 uint8_t memoryForSavingSettingsToTheModuleConst = TEMPORARY;
 
-String textToSend = "";
-String textLastSend = "";
-String textReceived = "";
-uint32_t timeCodeReceived = 0;
 uint32_t timeCodeUpdateAmbient = 0;
 uint8_t loraRssiLastReceive = 0;
 uint8_t loraRssiAmbient = 0;
+
+// Message Queues
+deque<String> receivedFromBluetooth;
+deque<String> receivedFromLora;
+deque<String> sendToBluetooth;
+deque<String> sendToLora;
 
 void setupSerialInProgramMode() {
     if (!Serial1.available()) {
         Serial1.begin(uartSpeedInSetupMode, SERIAL_8N1, PIN_RX, PIN_TX);
         if (SerialBluetooth.connected()) {
-            SerialBluetooth.println((__FlashStringHelper *) MESSAGE_SERIAL_IN_PROGRAM_MODE);
+            sendToBluetooth.push_front((__FlashStringHelper *) MESSAGE_SERIAL_IN_PROGRAM_MODE);
         }
         return;
     }
@@ -208,7 +212,7 @@ void setupSerialInProgramMode() {
         Serial1.end();
         Serial1.begin(uartSpeedInSetupMode, SERIAL_8N1, PIN_RX, PIN_TX);
         if (SerialBluetooth.connected()) {
-            SerialBluetooth.println((__FlashStringHelper *) MESSAGE_SERIAL_IN_PROGRAM_MODE);
+            sendToBluetooth.push_front((__FlashStringHelper *) MESSAGE_SERIAL_IN_PROGRAM_MODE);
         }
     }
 }
@@ -217,7 +221,7 @@ void setupSerialInWorkMode() {
     if (!Serial1.available()) {
         Serial1.begin(esp32currentSerialSpeed, SERIAL_8N1, PIN_RX, PIN_TX);
         if (SerialBluetooth.connected()) {
-            SerialBluetooth.println((__FlashStringHelper *) MESSAGE_SERIAL_IN_WORK_MODE);
+            sendToBluetooth.push_front((__FlashStringHelper *) MESSAGE_SERIAL_IN_WORK_MODE);
         }
         return;
     }
@@ -225,7 +229,7 @@ void setupSerialInWorkMode() {
         Serial1.end();
         Serial1.begin(esp32currentSerialSpeed, SERIAL_8N1, PIN_RX, PIN_TX);
         if (SerialBluetooth.connected()) {
-            SerialBluetooth.println((__FlashStringHelper *) MESSAGE_SERIAL_IN_WORK_MODE);
+            sendToBluetooth.push_front((__FlashStringHelper *) MESSAGE_SERIAL_IN_WORK_MODE);
         }
     }
 }
@@ -286,7 +290,8 @@ uint32_t getLoraSerialSpeedIndexByConst(uint8_t serialSpeedConst) {
     }
 }
 
-uint8_t getLoraSerialSpeedConstByIndex(uint32_t serialSpeedIndex) {
+uint8_t getLoraSerialSpeedConstByIndex(uint32_t
+                                       serialSpeedIndex) {
     switch (serialSpeedIndex) {
         case 1200:
             return UBR_1200;
@@ -476,107 +481,111 @@ void printText(String text, uint8_t line, uint8_t position, uint8_t clearSymbols
 }
 
 void updateDisplay() {
-    printText(String("Ambi:") + loraRssiAmbient, 0, 0, 10, 1);
+    printText(String("Ambient: ") + loraRssiAmbient, 0, 0, 20, 1);
     if (loraIsBusy) {
         Display.setTextColor(ST77XX_RED);
-        printText("State:BUSY", 0, 10, 10, 1);
+        printText("State: BUSY", 0, 20, 20, 1);
     } else {
         Display.setTextColor(ST77XX_GREEN);
-        printText("State:FREE", 0, 10, 10, 1);
+        printText("State: FREE", 0, 20, 20, 1);
     }
     Display.setTextColor(ST77XX_WHITE);
-    printText(String("RSSI:") + loraRssiLastReceive, 1, 0, 10, 1);
-    printText(String("Chan: ") + loraCurrentChannelIndex, 1, 10, 10, 1);
+    printText(String("RSSI: ") + loraRssiLastReceive, 2, 0, 20, 1);
+    printText(String("Channel: ") + loraCurrentChannelIndex, 2, 20, 20, 1);
     switch (loraCurrentAirSpeedConst) {
         case ADR_300: {
-            printText("Rate:300", 2, 0, 10, 1);
+            printText("Rate: 300", 4, 0, 20, 1);
             break;
         }
         case ADR_1200: {
-            printText("Rate:1200", 2, 0, 10, 1);
+            printText("Rate: 1200", 4, 0, 20, 1);
             break;
         }
         case ADR_2400: {
-            printText("Rate:2400", 2, 0, 10, 1);
+            printText("Rate: 2400", 4, 0, 20, 1);
             break;
         }
         case ADR_4800: {
-            printText("Rate:4800", 2, 0, 10, 1);
+            printText("Rate: 4800", 4, 0, 20, 1);
             break;
         }
         case ADR_9600: {
-            printText("Rate:9600", 2, 0, 10, 1);
+            printText("Rate: 9600", 4, 0, 20, 1);
             break;
         }
         case ADR_19200: {
-            printText("Rate:19200", 2, 0, 10, 1);
+            printText("Rate: 19200", 4, 0, 20, 1);
             break;
         }
         case ADR_38400: {
-            printText("Rate:38400", 2, 0, 10, 1);
+            printText("Rate: 38400", 4, 0, 20, 1);
             break;
         }
         case ADR_62500: {
-            printText("Rate:62500", 2, 0, 10, 1);
+            printText("Rate: 62500", 4, 0, 20, 1);
             break;
         }
     }
     switch (loraCurrentPacketSizeConst) {
         case PACKET240: {
-            printText("Pack: 240", 2, 10, 10, 1);
+            printText("Pack: 240", 4, 20, 20, 1);
             break;
         }
         case PACKET128: {
-            printText("Pack: 128", 2, 10, 10, 1);
+            printText("Pack: 128", 4, 20, 20, 1);
             break;
         }
         case PACKET64: {
-            printText("Pack: 64", 2, 10, 10, 1);
+            printText("Pack: 64", 4, 20, 20, 1);
             break;
         }
         case PACKET32: {
-            printText("Pack: 32", 2, 10, 10, 1);
+            printText("Pack: 32", 4, 20, 20, 1);
             break;
         }
     }
     char keyHex[10] = "";
-    printText(String("Key: ") + ltoa(loraCurrentEncryptionKeyIndex, keyHex, 16), 3, 0, 10, 1);
+    printText(String("Key: ") + ltoa(loraCurrentEncryptionKeyIndex, keyHex, 16), 6, 0, 20, 1);
     switch (loraCurrentPowerConst) {
         case TP_MAX: {
-            printText("Power:Max", 3, 10, 10, 1);
+            printText("Power: Max", 6, 20, 20, 1);
             break;
         }
         case TP_HIGH: {
-            printText("Power:High", 3, 10, 10, 1);
+            printText("Power: High", 6, 20, 20, 1);
             break;
         }
         case TP_MID: {
-            printText("Power:Mid", 3, 10, 10, 1);
+            printText("Power: Mid", 6, 20, 20, 1);
             break;
         }
         case TP_LOW: {
-            printText("Power:Low", 3, 10, 10, 1);
+            printText("Power: Low", 6, 20, 20, 1);
             break;
         }
     }
     char addressHex[10] = "";
-    printText(String("Addr:") + ltoa(loraCurrentAddressIndex, addressHex, 16), 4, 0, 10, 1);
+    printText(String("Address: ") + ltoa(loraCurrentAddressIndex, addressHex, 16), 8, 0, 20, 1);
     char netIDHex[10] = "";
-    printText(String("NetID:") + ltoa(loraCurrentNetIDIndex, netIDHex, 16), 4, 10, 10, 1);
-    printText(String(timeCodeReceived), 5, 0, 20, 1);
-    printText(textReceived, 6, 0, 20, 14);
+    printText(String("NetID: ") + ltoa(loraCurrentNetIDIndex, netIDHex, 16), 8, 20, 20, 1);
+    printText(String("Rec from B: ") + receivedFromBluetooth.size(), 10, 0, 20, 1);
+    printText(String("Send to B: ") + sendToBluetooth.size(), 10, 20, 20, 1);
+    printText(String("Rec from L: ") + receivedFromLora.size(), 12, 0, 20, 1);
+    printText(String("Send to L: ") + sendToLora.size(), 12, 20, 20, 1);
 }
 
 void printAllCommandsToBluetoothSerial() {
     if (SerialBluetooth.connected()) {
-        SerialBluetooth.println((__FlashStringHelper *) MESSAGE_COMMANDS_ALL);
+        sendToBluetooth.push_front((__FlashStringHelper *) MESSAGE_COMMANDS_ALL);
     }
 }
 
 void printFreePreferencesEntries() {
     if (SerialBluetooth.connected()) {
         Preferences.begin(KEY_PREFERENCES, true);
-        SerialBluetooth.println(Preferences.freeEntries());
+        String text = String((__FlashStringHelper *) COMMAND_GET_RETURN_VALUE_FREE_PREFERENCES_ENTRIES)
+                      + Preferences.freeEntries();
+        sendToBluetooth.push_front(text);
         Preferences.end();
     }
 }
@@ -606,87 +615,87 @@ void resetLoraSettings() {
     memoryForSavingSettingsToTheModuleConst = TEMPORARY;
     setupLora();
     if (SerialBluetooth.connected()) {
-        SerialBluetooth.println((__FlashStringHelper *) MESSAGE_READY);
+        sendToBluetooth.push_front((__FlashStringHelper *) MESSAGE_READY);
     }
 }
 
 void printCurrentLoraChannel() {
     if (SerialBluetooth.connected()) {
         loraCurrentChannelIndex = Lora.getChannel();
-        String textBuffer = (__FlashStringHelper *) COMMAND_GET_RETURN_VALUE_LORA_CHANNEL;
-        textBuffer = textBuffer + loraCurrentChannelIndex;
-        SerialBluetooth.println(textBuffer);
+        String text = String((__FlashStringHelper *) COMMAND_GET_RETURN_VALUE_LORA_CHANNEL)
+                      + loraCurrentChannelIndex;
+        sendToBluetooth.push_front(text);
     }
 }
 
 void printCurrentLoraAirSpeed() {
     if (SerialBluetooth.connected()) {
         loraCurrentAirSpeedConst = Lora.getAirDataRate();
-        String textBuffer = (__FlashStringHelper *) COMMAND_GET_RETURN_VALUE_LORA_AIR_SPEED;
-        textBuffer = textBuffer + getLoraAirSpeedIndexByConst(loraCurrentAirSpeedConst);
-        SerialBluetooth.println(textBuffer);
+        String text = String((__FlashStringHelper *) COMMAND_GET_RETURN_VALUE_LORA_AIR_SPEED)
+                      + getLoraAirSpeedIndexByConst(loraCurrentAirSpeedConst);
+        sendToBluetooth.push_front(text);
     }
 }
 
 void printCurrentLoraPacketSize() {
     if (SerialBluetooth.connected()) {
         loraCurrentPacketSizeConst = Lora.getPacketLength();
-        String textBuffer = (__FlashStringHelper *) COMMAND_GET_RETURN_VALUE_LORA_PACKET_SIZE;
-        textBuffer = textBuffer + getLoraPacketSizeIndexByConst(loraCurrentPacketSizeConst);
-        SerialBluetooth.println(textBuffer);
+        String text = String((__FlashStringHelper *) COMMAND_GET_RETURN_VALUE_LORA_PACKET_SIZE)
+                      + getLoraPacketSizeIndexByConst(loraCurrentPacketSizeConst);
+        sendToBluetooth.push_front(text);
     }
 }
 
 void printCurrentLoraPower() {
     if (SerialBluetooth.connected()) {
         loraCurrentPowerConst = Lora.getTransmitPower();
-        String textBuffer = (__FlashStringHelper *) COMMAND_GET_RETURN_VALUE_LORA_POWER;
-        textBuffer = textBuffer + getPowerIndexByConst(loraCurrentPowerConst);
-        SerialBluetooth.println(textBuffer);
+        String text = String((__FlashStringHelper *) COMMAND_GET_RETURN_VALUE_LORA_POWER)
+                      + getPowerIndexByConst(loraCurrentPowerConst);
+        sendToBluetooth.push_front(text);
     }
 }
 
 void printCurrentLoraSerialSpeed() {
     if (SerialBluetooth.connected()) {
         loraCurrentSerialSpeedConst = Lora.getUARTBaudRate();
-        String textBuffer = (__FlashStringHelper *) COMMAND_GET_RETURN_VALUE_LORA_SERIAL_SPEED;
-        textBuffer = textBuffer + getLoraSerialSpeedIndexByConst(loraCurrentSerialSpeedConst);
-        SerialBluetooth.println(textBuffer);
+        String text = String((__FlashStringHelper *) COMMAND_GET_RETURN_VALUE_LORA_SERIAL_SPEED)
+                      + getLoraSerialSpeedIndexByConst(loraCurrentSerialSpeedConst);
+        sendToBluetooth.push_front(text);
     }
 }
 
 void printCurrentBoardSerialSpeed() {
     if (SerialBluetooth.connected()) {
         esp32currentSerialSpeed = Serial1.baudRate();
-        String textBuffer = (__FlashStringHelper *) COMMAND_GET_RETURN_VALUE_BOARD_SERIAL_SPEED;
-        textBuffer = textBuffer + esp32currentSerialSpeed;
-        SerialBluetooth.println(textBuffer);
+        String text = String((__FlashStringHelper *) COMMAND_GET_RETURN_VALUE_BOARD_SERIAL_SPEED)
+                      + esp32currentSerialSpeed;
+        sendToBluetooth.push_front(text);
     }
 }
 
 void printCurrentLoraKey() {
     if (SerialBluetooth.connected()) {
-        String textBuffer = (__FlashStringHelper *) COMMAND_GET_RETURN_VALUE_LORA_KEY;
-        textBuffer = textBuffer + loraCurrentEncryptionKeyIndex;
-        SerialBluetooth.println(textBuffer);
+        String text = String((__FlashStringHelper *) COMMAND_GET_RETURN_VALUE_LORA_KEY)
+                      + loraCurrentEncryptionKeyIndex;
+        sendToBluetooth.push_front(text);
     }
 }
 
 void printCurrentLoraNetID() {
     if (SerialBluetooth.connected()) {
         loraCurrentNetIDIndex = Lora.getNetID();
-        String textBuffer = (__FlashStringHelper *) COMMAND_GET_RETURN_VALUE_LORA_NET_ID;
-        textBuffer = textBuffer + loraCurrentAddressIndex;
-        SerialBluetooth.println(textBuffer);
+        String text = String((__FlashStringHelper *) COMMAND_GET_RETURN_VALUE_LORA_NET_ID)
+                      + loraCurrentAddressIndex;
+        sendToBluetooth.push_front(text);
     }
 }
 
 void printCurrentLoraAddress() {
     if (SerialBluetooth.connected()) {
         loraCurrentAddressIndex = Lora.getAddress();
-        String textBuffer = (__FlashStringHelper *) COMMAND_GET_RETURN_VALUE_LORA_ADDRESS;
-        textBuffer = textBuffer + loraCurrentAddressIndex;
-        SerialBluetooth.println(textBuffer);
+        String text = String((__FlashStringHelper *) COMMAND_GET_RETURN_VALUE_LORA_ADDRESS)
+                      + loraCurrentAddressIndex;
+        sendToBluetooth.push_front(text);
     }
 }
 
@@ -703,7 +712,9 @@ void printAllLoraSettingsToBluetoothSerial() {
 void setupLoraPacketSize(uint8_t packetSizeIndex) {
     uint8_t packetSizeConst = getLoraPacketSizeConstByIndex(packetSizeIndex);
     if (packetSizeConst == 0) {
-        if (SerialBluetooth.connected()) SerialBluetooth.println((__FlashStringHelper *) MESSAGE_ERROR_PACKET_SIZE);
+        if (SerialBluetooth.connected()) {
+            sendToBluetooth.push_front((__FlashStringHelper *) MESSAGE_ERROR_PACKET_SIZE);
+        }
         return;
     }
     setupSerialInProgramMode();
@@ -712,7 +723,9 @@ void setupLoraPacketSize(uint8_t packetSizeIndex) {
     setupSerialInWorkMode();
     loraCurrentPacketSizeConst = Lora.getPacketLength();
     if (loraCurrentPacketSizeConst != packetSizeConst) {
-        if (SerialBluetooth.connected())SerialBluetooth.println((__FlashStringHelper *) MESSAGE_ERROR);
+        if (SerialBluetooth.connected()) {
+            sendToBluetooth.push_front((__FlashStringHelper *) MESSAGE_ERROR);
+        }
         return;
     }
     char preferencesKeyChar[maxKeySize];
@@ -721,13 +734,14 @@ void setupLoraPacketSize(uint8_t packetSizeIndex) {
     Preferences.begin(KEY_PREFERENCES, false);
     Preferences.putULong(preferencesKeyChar, loraCurrentPacketSizeConst);
     uint8_t saved = Preferences.getULong(preferencesKeyChar, 0);
-    if (saved != packetSizeConst && SerialBluetooth.connected())
-        SerialBluetooth.println((__FlashStringHelper *) MESSAGE_ERROR);
+    if (saved != packetSizeConst && SerialBluetooth.connected()) {
+        sendToBluetooth.push_front((__FlashStringHelper *) MESSAGE_ERROR);
+    }
     Preferences.end();
     if (SerialBluetooth.connected()) {
-        String textBuffer = (__FlashStringHelper *) COMMAND_GET_RETURN_VALUE_LORA_PACKET_SIZE;
-        textBuffer = textBuffer + getLoraPacketSizeIndexByConst(loraCurrentPacketSizeConst);
-        SerialBluetooth.println(textBuffer);
+        String text = String((__FlashStringHelper *) COMMAND_GET_RETURN_VALUE_LORA_PACKET_SIZE)
+                      + getLoraPacketSizeIndexByConst(loraCurrentPacketSizeConst);
+        sendToBluetooth.push_front(text);
     }
 }
 
@@ -735,7 +749,9 @@ void setupLoraPacketSize(uint8_t packetSizeIndex) {
 void setupLoraTransmitPower(uint8_t powerIndex) {
     uint8_t powerConst = getPowerConstByIndex(powerIndex);
     if (powerConst == 0) {
-        if (SerialBluetooth.connected()) SerialBluetooth.println((__FlashStringHelper *) MESSAGE_ERROR_POWER);
+        if (SerialBluetooth.connected()) {
+            sendToBluetooth.push_front((__FlashStringHelper *) MESSAGE_ERROR_POWER);
+        }
         return;
     }
     setupSerialInProgramMode();
@@ -744,7 +760,9 @@ void setupLoraTransmitPower(uint8_t powerIndex) {
     setupSerialInWorkMode();
     loraCurrentPowerConst = Lora.getTransmitPower();
     if (loraCurrentPowerConst != powerConst) {
-        if (SerialBluetooth.connected())SerialBluetooth.println((__FlashStringHelper *) MESSAGE_ERROR);
+        if (SerialBluetooth.connected()) {
+            sendToBluetooth.push_front((__FlashStringHelper *) MESSAGE_ERROR);
+        }
         return;
     }
     char preferencesKeyChar[maxKeySize];
@@ -754,19 +772,21 @@ void setupLoraTransmitPower(uint8_t powerIndex) {
     Preferences.putULong(preferencesKeyChar, powerConst);
     uint8_t saved = Preferences.getULong(preferencesKeyChar, 0);
     if (saved != powerConst && SerialBluetooth.connected())
-        SerialBluetooth.println((__FlashStringHelper *) MESSAGE_ERROR);
+        sendToBluetooth.push_front((__FlashStringHelper *) MESSAGE_ERROR);
     Preferences.end();
     if (SerialBluetooth.connected()) {
-        String textBuffer = (__FlashStringHelper *) COMMAND_GET_RETURN_VALUE_LORA_POWER;
-        textBuffer = textBuffer + getPowerIndexByConst(loraCurrentPowerConst);
-        SerialBluetooth.println(textBuffer);
+        String text = String((__FlashStringHelper *) COMMAND_GET_RETURN_VALUE_LORA_POWER)
+                      + getPowerIndexByConst(loraCurrentPowerConst);
+        sendToBluetooth.push_front(text);
     }
 }
 
 void setupLoraAirSpeed(uint16_t airSpeedIndex) {
     uint8_t airSpeedConst = getLoraAirSpeedConstByIndex(airSpeedIndex);
     if (airSpeedConst == 0) {
-        if (SerialBluetooth.connected()) SerialBluetooth.println((__FlashStringHelper *) MESSAGE_ERROR_AIR_SPEED);
+        if (SerialBluetooth.connected()) {
+            sendToBluetooth.push_front((__FlashStringHelper *) MESSAGE_ERROR_AIR_SPEED);
+        }
         return;
     }
     setupSerialInProgramMode();
@@ -775,7 +795,9 @@ void setupLoraAirSpeed(uint16_t airSpeedIndex) {
     setupSerialInWorkMode();
     loraCurrentAirSpeedConst = Lora.getAirDataRate();
     if (loraCurrentAirSpeedConst != airSpeedConst) {
-        if (SerialBluetooth.connected())SerialBluetooth.println((__FlashStringHelper *) MESSAGE_ERROR);
+        if (SerialBluetooth.connected()) {
+            sendToBluetooth.push_front((__FlashStringHelper *) MESSAGE_ERROR);
+        }
         return;
     }
     char preferencesKeyChar[maxKeySize];
@@ -784,20 +806,23 @@ void setupLoraAirSpeed(uint16_t airSpeedIndex) {
     Preferences.begin(KEY_PREFERENCES, false);
     Preferences.putULong(preferencesKeyChar, airSpeedConst);
     uint8_t saved = Preferences.getULong(preferencesKeyChar, 0);
-    if (saved != airSpeedConst && SerialBluetooth.connected())
-        SerialBluetooth.println((__FlashStringHelper *) MESSAGE_ERROR);
+    if (saved != airSpeedConst && SerialBluetooth.connected()) {
+        sendToBluetooth.push_front((__FlashStringHelper *) MESSAGE_ERROR);
+    }
     Preferences.end();
     if (SerialBluetooth.connected()) {
-        String textBuffer = (__FlashStringHelper *) COMMAND_GET_RETURN_VALUE_LORA_AIR_SPEED;
-        textBuffer = textBuffer + getLoraAirSpeedIndexByConst(loraCurrentAirSpeedConst);
-        SerialBluetooth.println(textBuffer);
+        String text = String((__FlashStringHelper *) COMMAND_GET_RETURN_VALUE_LORA_AIR_SPEED)
+                      + getLoraAirSpeedIndexByConst(loraCurrentAirSpeedConst);
+        sendToBluetooth.push_front(text);
     }
 }
 
 void setupLoraSerialSpeed(uint32_t serialSpeedIndex) {
     uint8_t serialSpeedConst = getLoraSerialSpeedConstByIndex(serialSpeedIndex);
     if (serialSpeedConst == 0) {
-        if (SerialBluetooth.connected()) SerialBluetooth.println((__FlashStringHelper *) MESSAGE_ERROR_SERIAL_SPEED);
+        if (SerialBluetooth.connected()) {
+            sendToBluetooth.push_front((__FlashStringHelper *) MESSAGE_ERROR_SERIAL_SPEED);
+        }
         return;
     }
     setupSerialInProgramMode();
@@ -807,19 +832,23 @@ void setupLoraSerialSpeed(uint32_t serialSpeedIndex) {
     setupSerialInWorkMode();
     loraCurrentSerialSpeedConst = Lora.getUARTBaudRate();
     if (loraCurrentSerialSpeedConst != serialSpeedConst) {
-        if (SerialBluetooth.connected())SerialBluetooth.println((__FlashStringHelper *) MESSAGE_ERROR);
+        if (SerialBluetooth.connected()) {
+            sendToBluetooth.push_front((__FlashStringHelper *) MESSAGE_ERROR);
+        }
         return;
     }
     if (SerialBluetooth.connected()) {
-        String textBuffer = (__FlashStringHelper *) COMMAND_GET_RETURN_VALUE_LORA_SERIAL_SPEED;
-        textBuffer = textBuffer + getLoraSerialSpeedIndexByConst(loraCurrentSerialSpeedConst);
-        SerialBluetooth.println(textBuffer);
+        String text = String((__FlashStringHelper *) COMMAND_GET_RETURN_VALUE_LORA_SERIAL_SPEED)
+                      + getLoraSerialSpeedIndexByConst(loraCurrentSerialSpeedConst);
+        sendToBluetooth.push_front(text);
     }
 }
 
 void setupLoraNetId(uint8_t netID) {
     if (netID < 0 || netID > 255) {
-        if (SerialBluetooth.connected())SerialBluetooth.println((__FlashStringHelper *) MESSAGE_ERROR_NET_ID);
+        if (SerialBluetooth.connected()) {
+            sendToBluetooth.push_front((__FlashStringHelper *) MESSAGE_ERROR_NET_ID);
+        }
         return;
     }
     setupSerialInProgramMode();
@@ -828,7 +857,9 @@ void setupLoraNetId(uint8_t netID) {
     setupSerialInWorkMode();
     loraCurrentNetIDIndex = Lora.getNetID();
     if (loraCurrentNetIDIndex != netID) {
-        if (SerialBluetooth.connected())SerialBluetooth.println((__FlashStringHelper *) MESSAGE_ERROR);
+        if (SerialBluetooth.connected()) {
+            sendToBluetooth.push_front((__FlashStringHelper *) MESSAGE_ERROR);
+        }
         return;
     }
     char preferencesKeyChar[maxKeySize];
@@ -837,19 +868,22 @@ void setupLoraNetId(uint8_t netID) {
     Preferences.begin(KEY_PREFERENCES, false);
     Preferences.putULong(preferencesKeyChar, netID);
     uint8_t saved = Preferences.getULong(preferencesKeyChar, 0);
-    if (saved != netID && SerialBluetooth.connected())
-        SerialBluetooth.println((__FlashStringHelper *) MESSAGE_ERROR);
+    if (saved != netID && SerialBluetooth.connected()) {
+        sendToBluetooth.push_front((__FlashStringHelper *) MESSAGE_ERROR);
+    }
     Preferences.end();
     if (SerialBluetooth.connected()) {
-        String textBuffer = (__FlashStringHelper *) COMMAND_GET_RETURN_VALUE_LORA_NET_ID;
-        textBuffer = textBuffer + loraCurrentAddressIndex;
-        SerialBluetooth.println(textBuffer);
+        String text = String((__FlashStringHelper *) COMMAND_GET_RETURN_VALUE_LORA_NET_ID)
+                      + loraCurrentAddressIndex;
+        sendToBluetooth.push_front(text);
     }
 }
 
 void setupLoraAddress(uint16_t address) {
     if (address < 0 || address > 65535) {
-        if (SerialBluetooth.connected())SerialBluetooth.println((__FlashStringHelper *) MESSAGE_ERROR_ADDRESS);
+        if (SerialBluetooth.connected()) {
+            sendToBluetooth.push_front((__FlashStringHelper *) MESSAGE_ERROR_ADDRESS);
+        }
         return;
     }
     setupSerialInProgramMode();
@@ -858,7 +892,9 @@ void setupLoraAddress(uint16_t address) {
     setupSerialInWorkMode();
     loraCurrentAddressIndex = Lora.getAddress();
     if (loraCurrentAddressIndex != address) {
-        if (SerialBluetooth.connected())SerialBluetooth.println((__FlashStringHelper *) MESSAGE_ERROR);
+        if (SerialBluetooth.connected()) {
+            sendToBluetooth.push_front((__FlashStringHelper *) MESSAGE_ERROR);
+        }
         return;
     }
     char preferencesKeyChar[maxKeySize];
@@ -867,19 +903,22 @@ void setupLoraAddress(uint16_t address) {
     Preferences.begin(KEY_PREFERENCES, false);
     Preferences.putULong(preferencesKeyChar, address);
     uint8_t saved = Preferences.getULong(preferencesKeyChar, 0);
-    if (saved != address && SerialBluetooth.connected())
-        SerialBluetooth.println((__FlashStringHelper *) MESSAGE_ERROR);
+    if (saved != address && SerialBluetooth.connected()) {
+        sendToBluetooth.push_front((__FlashStringHelper *) MESSAGE_ERROR);
+    }
     Preferences.end();
     if (SerialBluetooth.connected()) {
-        String textBuffer = (__FlashStringHelper *) COMMAND_GET_RETURN_VALUE_LORA_ADDRESS;
-        textBuffer = textBuffer + loraCurrentAddressIndex;
-        SerialBluetooth.println(textBuffer);
+        String text = String((__FlashStringHelper *) COMMAND_GET_RETURN_VALUE_LORA_ADDRESS)
+                      + loraCurrentAddressIndex;
+        sendToBluetooth.push_front(text);
     }
 }
 
 void setupLoraKey(uint16_t keyIndex) {
     if (keyIndex < 0 || keyIndex > 65535) {
-        if (SerialBluetooth.connected()) SerialBluetooth.println((__FlashStringHelper *) MESSAGE_ERROR_KEY);
+        if (SerialBluetooth.connected()) {
+            sendToBluetooth.push_front((__FlashStringHelper *) MESSAGE_ERROR_KEY);
+        }
         return;
     }
     setupSerialInProgramMode();
@@ -892,19 +931,22 @@ void setupLoraKey(uint16_t keyIndex) {
     Preferences.begin(KEY_PREFERENCES, false);
     Preferences.putULong(preferencesKeyChar, keyIndex);
     uint8_t saved = Preferences.getULong(preferencesKeyChar, 0);
-    if (saved != keyIndex && SerialBluetooth.connected())
-        SerialBluetooth.println((__FlashStringHelper *) MESSAGE_ERROR);
+    if (saved != keyIndex && SerialBluetooth.connected()) {
+        sendToBluetooth.push_front((__FlashStringHelper *) MESSAGE_ERROR);
+    }
     Preferences.end();
     if (SerialBluetooth.connected()) {
-        String textBuffer = (__FlashStringHelper *) COMMAND_GET_RETURN_VALUE_LORA_KEY;
-        textBuffer = textBuffer + loraCurrentEncryptionKeyIndex;
-        SerialBluetooth.println(textBuffer);
+        String text = String((__FlashStringHelper *) COMMAND_GET_RETURN_VALUE_LORA_KEY)
+                      + loraCurrentEncryptionKeyIndex;
+        sendToBluetooth.push_front(text);
     }
 }
 
 void setupLoraChannel(uint16_t channelIndex) {
     if (channelIndex < 0 || channelIndex > 83) {
-        if (SerialBluetooth.connected()) SerialBluetooth.println((__FlashStringHelper *) MESSAGE_ERROR_CHANNEL);
+        if (SerialBluetooth.connected()) {
+            sendToBluetooth.push_front((__FlashStringHelper *) MESSAGE_ERROR_CHANNEL);
+        }
         return;
     }
     setupSerialInProgramMode();
@@ -913,7 +955,9 @@ void setupLoraChannel(uint16_t channelIndex) {
     setupSerialInWorkMode();
     loraCurrentChannelIndex = Lora.getChannel();
     if (loraCurrentChannelIndex != channelIndex) {
-        if (SerialBluetooth.connected())SerialBluetooth.println((__FlashStringHelper *) MESSAGE_ERROR);
+        if (SerialBluetooth.connected()) {
+            sendToBluetooth.push_front((__FlashStringHelper *) MESSAGE_ERROR);
+        }
         return;
     }
     char preferencesKeyChar[maxKeySize];
@@ -922,195 +966,278 @@ void setupLoraChannel(uint16_t channelIndex) {
     Preferences.begin(KEY_PREFERENCES, false);
     Preferences.putULong(preferencesKeyChar, channelIndex);
     uint8_t saved = Preferences.getULong(preferencesKeyChar, 0);
-    if (saved != channelIndex && SerialBluetooth.connected())
-        SerialBluetooth.println((__FlashStringHelper *) MESSAGE_ERROR);
+    if (saved != channelIndex && SerialBluetooth.connected()) {
+        sendToBluetooth.push_front((__FlashStringHelper *) MESSAGE_ERROR);
+    }
     Preferences.end();
     if (SerialBluetooth.connected()) {
-        String textBuffer = (__FlashStringHelper *) COMMAND_GET_RETURN_VALUE_LORA_CHANNEL;
-        textBuffer = textBuffer + loraCurrentChannelIndex;
-        SerialBluetooth.println(textBuffer);
+        String text = String((__FlashStringHelper *) COMMAND_GET_RETURN_VALUE_LORA_CHANNEL)
+                      + loraCurrentChannelIndex;
+        sendToBluetooth.push_front(text);
     }
 }
 
-// commands will be json for mobile client
-void parseCommand(String buffer) {
-    if (buffer.isEmpty()) return;
-    if (buffer.startsWith((__FlashStringHelper *) COMMAND_GET_LORA_SETTINGS)) {
+void sendTextToLora(String text) {
+    if (text.isEmpty()) {
+        return;
+    }
+    if (!text.isEmpty()) {
+        text = text + "|";
+        sendToLora.push_front(text);
+        if (SerialBluetooth.connected()) {
+            text = String((__FlashStringHelper *) MESSAGE_LORA_MESSAGE_QUEUED_FOR_SENDING);
+            sendToBluetooth.push_front(text);
+        }
+    }
+}
+
+void parseCommand(String text) {
+    if (text.isEmpty()) return;
+    if (text.startsWith((__FlashStringHelper *) COMMAND_SEND_MESSAGE)) {
+        text.replace((__FlashStringHelper *) COMMAND_SEND_MESSAGE, "");
+        int index = text.indexOf("|");
+        if (index > 0) {
+            text.remove(index, text.length());
+        }
+        if (!text.isEmpty()) {
+            sendTextToLora(text);
+        }
+        return;
+    }
+    if (text.startsWith((__FlashStringHelper *) COMMAND_GET_LORA_SETTINGS)) {
         printAllLoraSettingsToBluetoothSerial();
         return;
     }
-    if (buffer.startsWith((__FlashStringHelper *) COMMAND_PRINT_COMMANDS)) {
+    if (text.startsWith((__FlashStringHelper *) COMMAND_PRINT_COMMANDS)) {
         printAllCommandsToBluetoothSerial();
         return;
     }
-    if (buffer.startsWith((__FlashStringHelper *) COMMAND_FREE_PREFERENCES_ENTRIES)) {
+    if (text.startsWith((__FlashStringHelper *) COMMAND_GET_FREE_PREFERENCES_ENTRIES)) {
         printFreePreferencesEntries();
         return;
     }
-    if (buffer.startsWith((__FlashStringHelper *) COMMAND_RESET_LORA_SETTINGS)) {
+    if (text.startsWith((__FlashStringHelper *) COMMAND_RESET_LORA_SETTINGS)) {
         resetLoraSettings();
         return;
     }
-    if (buffer.startsWith((__FlashStringHelper *) COMMAND_GET_LORA_CHANNEL)) {
+    if (text.startsWith((__FlashStringHelper *) COMMAND_GET_LORA_CHANNEL)) {
         printCurrentLoraChannel();
         return;
     }
-    if (buffer.startsWith((__FlashStringHelper *) COMMAND_GET_LORA_AIR_SPEED)) {
+    if (text.startsWith((__FlashStringHelper *) COMMAND_GET_LORA_AIR_SPEED)) {
         printCurrentLoraAirSpeed();
         return;
     }
-    if (buffer.startsWith((__FlashStringHelper *) COMMAND_GET_LORA_PACKET_SIZE)) {
+    if (text.startsWith((__FlashStringHelper *) COMMAND_GET_LORA_PACKET_SIZE)) {
         printCurrentLoraPacketSize();
         return;
     }
-    if (buffer.startsWith((__FlashStringHelper *) COMMAND_GET_LORA_POWER)) {
+    if (text.startsWith((__FlashStringHelper *) COMMAND_GET_LORA_POWER)) {
         printCurrentLoraPower();
         return;
     }
-    if (buffer.startsWith((__FlashStringHelper *) COMMAND_GET_LORA_KEY)) {
+    if (text.startsWith((__FlashStringHelper *) COMMAND_GET_LORA_KEY)) {
         printCurrentLoraKey();
         return;
     }
-    if (buffer.startsWith((__FlashStringHelper *) COMMAND_GET_LORA_NET_ID)) {
+    if (text.startsWith((__FlashStringHelper *) COMMAND_GET_LORA_NET_ID)) {
         printCurrentLoraNetID();
         return;
     }
-    if (buffer.startsWith((__FlashStringHelper *) COMMAND_GET_LORA_ADDRESS)) {
+    if (text.startsWith((__FlashStringHelper *) COMMAND_GET_LORA_ADDRESS)) {
         printCurrentLoraAddress();
         return;
     }
-    if (buffer.startsWith((__FlashStringHelper *) COMMAND_GET_LORA_SERIAL_SPEED)) {
+    if (text.startsWith((__FlashStringHelper *) COMMAND_GET_LORA_SERIAL_SPEED)) {
         printCurrentLoraSerialSpeed();
         return;
     }
-    if (buffer.startsWith((__FlashStringHelper *) COMMAND_GET_BOARD_SERIAL_SPEED)) {
+    if (text.startsWith((__FlashStringHelper *) COMMAND_GET_BOARD_SERIAL_SPEED)) {
         printCurrentBoardSerialSpeed();
         return;
     }
-    if (buffer.startsWith((__FlashStringHelper *) COMMAND_SET_LORA_NET_ID)) {
-        buffer.replace((__FlashStringHelper *) COMMAND_SET_LORA_NET_ID, "");
-        setupLoraNetId(buffer.toInt());
+    if (text.startsWith((__FlashStringHelper *) COMMAND_SET_LORA_NET_ID)) {
+        text.replace((__FlashStringHelper *) COMMAND_SET_LORA_NET_ID, "");
+        int index = text.indexOf("|");
+        if (index > 0) {
+            text.remove(index, text.length());
+        }
+        if (!text.isEmpty()) {
+            setupLoraNetId(text.toInt());
+        }
         return;
     }
-    if (buffer.startsWith((__FlashStringHelper *) COMMAND_SET_LORA_ADDRESS)) {
-        buffer.replace((__FlashStringHelper *) COMMAND_SET_LORA_ADDRESS, "");
-        setupLoraAddress(buffer.toInt());
+    if (text.startsWith((__FlashStringHelper *) COMMAND_SET_LORA_ADDRESS)) {
+        text.replace((__FlashStringHelper *) COMMAND_SET_LORA_ADDRESS, "");
+        int index = text.indexOf("|");
+        if (index > 0) {
+            text.remove(index, text.length());
+        }
+        if (!text.isEmpty()) {
+            setupLoraAddress(text.toInt());
+        }
         return;
     }
-    if (buffer.startsWith((__FlashStringHelper *) COMMAND_SET_LORA_KEY)) {
-        buffer.replace((__FlashStringHelper *) COMMAND_SET_LORA_KEY, "");
-        setupLoraKey(buffer.toInt());
+    if (text.startsWith((__FlashStringHelper *) COMMAND_SET_LORA_KEY)) {
+        text.replace((__FlashStringHelper *) COMMAND_SET_LORA_KEY, "");
+        int index = text.indexOf("|");
+        if (index > 0) {
+            text.remove(index, text.length());
+        }
+        if (!text.isEmpty()) {
+            setupLoraKey(text.toInt());
+        }
         return;
     }
-    if (buffer.startsWith((__FlashStringHelper *) COMMAND_SET_LORA_POWER)) {
-        buffer.replace((__FlashStringHelper *) COMMAND_SET_LORA_POWER, "");
-        setupLoraTransmitPower(buffer.toInt());
+    if (text.startsWith((__FlashStringHelper *) COMMAND_SET_LORA_POWER)) {
+        text.replace((__FlashStringHelper *) COMMAND_SET_LORA_POWER, "");
+        int index = text.indexOf("|");
+        if (index > 0) {
+            text.remove(index, text.length());
+        }
+        if (!text.isEmpty()) {
+            setupLoraTransmitPower(text.toInt());
+        }
         return;
     }
-    if (buffer.startsWith((__FlashStringHelper *) COMMAND_SET_LORA_PACKET_SIZE)) {
-        buffer.replace((__FlashStringHelper *) COMMAND_SET_LORA_PACKET_SIZE, "");
-        setupLoraPacketSize(buffer.toInt());
+    if (text.startsWith((__FlashStringHelper *) COMMAND_SET_LORA_PACKET_SIZE)) {
+        text.replace((__FlashStringHelper *) COMMAND_SET_LORA_PACKET_SIZE, "");
+        int index = text.indexOf("|");
+        if (index > 0) {
+            text.remove(index, text.length());
+        }
+        if (!text.isEmpty()) {
+            setupLoraPacketSize(text.toInt());
+        }
         return;
     }
-    if (buffer.startsWith((__FlashStringHelper *) COMMAND_SET_LORA_CHANNEL)) {
-        buffer.replace((__FlashStringHelper *) COMMAND_SET_LORA_CHANNEL, "");
-        setupLoraChannel(buffer.toInt());
+    if (text.startsWith((__FlashStringHelper *) COMMAND_SET_LORA_CHANNEL)) {
+        text.replace((__FlashStringHelper *) COMMAND_SET_LORA_CHANNEL, "");
+        int index = text.indexOf("|");
+        if (index > 0) {
+            text.remove(index, text.length());
+        }
+        if (!text.isEmpty()) {
+            setupLoraChannel(text.toInt());
+        }
         return;
     }
-    if (buffer.startsWith((__FlashStringHelper *) COMMAND_SET_LORA_AIR_SPEED)) {
-        buffer.replace((__FlashStringHelper *) COMMAND_SET_LORA_AIR_SPEED, "");
-        setupLoraAirSpeed(buffer.toInt());
+    if (text.startsWith((__FlashStringHelper *) COMMAND_SET_LORA_AIR_SPEED)) {
+        text.replace((__FlashStringHelper *) COMMAND_SET_LORA_AIR_SPEED, "");
+        int index = text.indexOf("|");
+        if (index > 0) {
+            text.remove(index, text.length());
+        }
+        if (!text.isEmpty()) {
+            setupLoraAirSpeed(text.toInt());
+        }
         return;
     }
-    if (buffer.startsWith((__FlashStringHelper *) COMMAND_SET_LORA_SERIAL_SPEED)) {
-        buffer.replace((__FlashStringHelper *) COMMAND_SET_LORA_SERIAL_SPEED, "");
-        setupLoraSerialSpeed(buffer.toInt());
+    if (text.startsWith((__FlashStringHelper *) COMMAND_SET_LORA_SERIAL_SPEED)) {
+        text.replace((__FlashStringHelper *) COMMAND_SET_LORA_SERIAL_SPEED, "");
+        int index = text.indexOf("|");
+        if (index > 0) {
+            text.remove(index, text.length());
+        }
+        if (!text.isEmpty()) {
+            setupLoraSerialSpeed(text.toInt());
+        }
         return;
     }
-    if (textToSend.isEmpty()) {
-        textToSend = buffer;
-    } else {
-        textToSend = textToSend + "/n" + buffer;
-    }
-    if (SerialBluetooth.connected()) {
-        String textBuffer = (__FlashStringHelper *) MESSAGE_LORA_MESSAGE_QUEUED_FOR_SENDING;
-        textBuffer = textBuffer + textToSend;
-        SerialBluetooth.println(textBuffer);
-    }
-    textLastSend = textToSend;
 }
 
-
-void updateSystem() {
-    loraIsBusy = Lora.getBusy();
-    uint32_t currentTime = millis();
-    if (!loraIsBusy && currentTime > timeCodeUpdateAmbient + LORA_UPDATE_AMBIENT_DELAY) {
-        loraRssiAmbient = Lora.getRSSI(RSSI_AMBIENT);
-        timeCodeUpdateAmbient = currentTime;
-        if (SerialBluetooth.connected()) {
-            String textBuffer = (__FlashStringHelper *) MESSAGE_LORA_RSSI_AMBIENT;
-            textBuffer = textBuffer + loraRssiAmbient;
-            SerialBluetooth.println(textBuffer);
-        }
-    }
-    if (Lora.available() > 0) {
-        textReceived = Serial1.readString();
-        loraRssiLastReceive = Lora.getRSSI(RSSI_LAST_RECEIVE);
-        timeCodeReceived = millis();
-        if (SerialBluetooth.connected()) {
-            String textBuffer = (__FlashStringHelper *) MESSAGE_LORA_MESSAGE_RECEIVED;
-            textBuffer = textBuffer + textReceived;
-            SerialBluetooth.println(textBuffer);
-            textBuffer = (__FlashStringHelper *) MESSAGE_LORA_RSSI_FOR_LAST_MESSAGE_RECEIVED;
-            textBuffer = textBuffer + loraRssiLastReceive;
-            SerialBluetooth.println(textBuffer);
-        }
-    }
-    if (SerialBluetooth.connected() && SerialBluetooth.available()) {
-        parseCommand(SerialBluetooth.readString());
-    }
-    if (!textToSend.isEmpty() && Serial1.available()) {
-        Serial1.print(textToSend);
-        if (SerialBluetooth.connected()) {
-            SerialBluetooth.println("The message was sent and most likely received by another device:");
-            SerialBluetooth.println(textToSend);
-        }
-        textToSend = "";
-    }
-}
-
-void taskSystemProcesses(void *pvParameters) {
+void taskMessageQueues(void *pvParameters) {
     while (true) {
-        updateSystem();
-        if (UPDATE_SYSTEM_DELAY > 0)
-            delay(UPDATE_SYSTEM_DELAY);
+        if (Lora.available() > 0 && !Lora.getBusy()) {
+            String text = Serial1.readString();
+            if (!text.isEmpty()) {
+                text = text + "|";
+                receivedFromLora.push_front(text);
+                loraRssiLastReceive = Lora.getRSSI(RSSI_LAST_RECEIVE);
+            }
+        }
+        while (receivedFromLora.size() > 20) {
+            receivedFromLora.erase(receivedFromLora.end());
+        }
+        if (SerialBluetooth.connected() && SerialBluetooth.available()) {
+            String text = SerialBluetooth.readString();
+            if (!text.isEmpty()) {
+                text = text + "|";
+                receivedFromBluetooth.push_front(text);
+            }
+        }
+        while (receivedFromBluetooth.size() > 20) {
+            receivedFromBluetooth.erase(receivedFromBluetooth.end());
+        }
+        if (!sendToLora.empty() && !Lora.getBusy()) {
+            String text = sendToLora[0] + "|";
+            Serial1.print(text);
+            sendToLora.erase(sendToLora.begin());
+        }
+        while (sendToLora.size() > 20) {
+            sendToLora.erase(sendToLora.end());
+        }
+        if (SerialBluetooth.connected() && !sendToBluetooth.empty()) {
+            String text = sendToBluetooth[0] + "|";
+            SerialBluetooth.print(text);
+            sendToBluetooth.erase(sendToBluetooth.begin());
+        }
+        while (sendToBluetooth.size() > 20) {
+            sendToBluetooth.erase(sendToBluetooth.end());
+        }
     }
 }
 
-void taskUpdateDisplay(void *pvParameters) {
+void taskMessageProcessing(void *pvParameters) {
     while (true) {
+        loraIsBusy = Lora.getBusy();
+        if (SerialBluetooth.connected() && !receivedFromLora.empty()) {
+            String message = receivedFromLora[0];
+            receivedFromLora.erase(receivedFromLora.begin());
+            if (!message.isEmpty()) {
+                String text = String((__FlashStringHelper *) MESSAGE_LORA_MESSAGE_RECEIVED)
+                              + message;
+                sendToBluetooth.push_front(text);
+                text = String((__FlashStringHelper *) MESSAGE_LORA_RSSI_FOR_LAST_MESSAGE_RECEIVED)
+                       + loraRssiLastReceive;
+                sendToBluetooth.push_front(text);
+            }
+        }
+        if (!receivedFromBluetooth.empty()) {
+            parseCommand(receivedFromBluetooth[0]);
+            receivedFromBluetooth.erase(receivedFromBluetooth.end());
+        }
+        uint32_t currentTime = millis();
+        if (!Lora.getBusy() && currentTime > timeCodeUpdateAmbient + LORA_UPDATE_AMBIENT_DELAY) {
+            loraRssiAmbient = Lora.getRSSI(RSSI_AMBIENT);
+            timeCodeUpdateAmbient = currentTime;
+            if (SerialBluetooth.connected()) {
+                String text = String((__FlashStringHelper *) MESSAGE_LORA_RSSI_AMBIENT)
+                              + loraRssiAmbient;
+                sendToBluetooth.push_front(text);
+            }
+        }
         updateDisplay();
-        if (UPDATE_DISPLAY_DELAY > 0)
-            delay(UPDATE_DISPLAY_DELAY);
+        delay(100);
     }
 }
 
 void setupTasksForESP32Cores() {
     xTaskCreatePinnedToCore(
-            taskUpdateDisplay,
-            "taskUpdateDisplay",
-            TASK_UPDATE_DISPLAY_STACK,
+            taskMessageProcessing,
+            "taskMessageProcessing",
+            50000,
             NULL,
             1,
-            &TaskUpdateDisplay,
+            &TaskMessageProcessing,
             0);
     xTaskCreatePinnedToCore(
-            taskSystemProcesses,
-            "taskSystemProcesses",
-            TASK_SYSTEM_PROCESSES_STACK,
+            taskMessageQueues,
+            "taskMessageQueues",
+            50000,
             NULL,
             1,
-            &TaskSystemProcesses,
+            &TaskMessageQueues,
             1);
 }
 
@@ -1119,7 +1246,7 @@ void setupDisplay() {
     Display.setSPISpeed(40000000);
     Display.setTextColor(ST77XX_WHITE);
     Display.setRotation(2);
-    Display.setTextSize(2);
+    Display.setTextSize(1);
     Display.setTextWrap(true);
     Display.fillScreen(ST77XX_BLACK);
     Display.setCursor(0, 0);
@@ -1130,11 +1257,9 @@ void setup() {
     SerialBluetooth.begin(BLUETOOTH_NAME);
     Serial1.begin(esp32currentSerialSpeed, SERIAL_8N1, PIN_RX, PIN_TX);
     readDataFromEEPROM();
-    printAllLoraSettingsToBluetoothSerial();
     setupDisplay();
     Lora.init();
     setupLora();
-
     setupTasksForESP32Cores();
 }
 
