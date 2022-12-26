@@ -62,7 +62,7 @@ https://github.com/RomanKryvolapov/LoraMessengerAndroidClient
 <h4>PrintCommands (Print all available commands)</h4>
 
 <h3>In the future:</h4>
-<p>- Protocol will be added for private messages, group chats.</p>
+<p>- P2P / Broadcast / Multicast protocol will be added for private messages, group chats.</p>
 <p>- Retranslation of messages, which will expand the coverage area (I do not want to use native Lora retranslation, because it is limited in capabilities).</p>
 <p>- Connect a keyboard to board so that I can make a menu for settings and so that I can send messages without using a smartphone.</p>
 <p>- For the client for the board, support for OOP and universal classes will be added to work with different types of modules, displays and input devices, now the code for the board looks like Arduino-style code, but it will look like C++-style code.</p>
