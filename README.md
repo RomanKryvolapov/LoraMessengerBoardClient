@@ -9,23 +9,6 @@
 <p>Currently working with modules produced by Ebyte 400MHz / 900MHz / 230MHz / 170MHz, because they are among the best in range and at the same time they are cheap. In the future, there will be compatibility with modules from other manufacturers.</p>
 <p>I used a module with a uart interface, it contains an additional STM controller that converts UART to SPI and helps in setting up the module.</p>
 <p>Now the client for the board has 2 processing threads for 2 ESP32 cores - one receives messages and adds them to the queue for processing, and also sends messages from the queue for sending, the second thread processes messages from the queue for processing and adds them to the queue for sending. This approach allows you to evenly distribute data processing to work with slow interfaces. Perhaps I will change this approach in the future.</p>
-<h3>In the future:</h4>
-<p>- Protocol will be added for private messages, group chats.</p>
-<p>- Retranslation of messages, which will expand the coverage area (I do not want to use native Lora retranslation, because it is limited in capabilities).</p>
-<p>- Add support for modules with a SPI interface.</p>
-<p>- Connect a keyboard to board so that I can make a menu for settings and so that I can send messages without using a smartphone.</p>
-<p>- For the client for the board, support for OOP and universal classes will be added to work with different types of modules, displays and input devices, now the code for the board looks like Arduino-style code, but it will look like C++-style code.</p>
-<p>- Support for various screens:</p>
-<p>320x480 RGB</p>
-<p>320x240 RGB</p>
-<p>128x160 RGB</p>
-<p>204x204 RGB</p>
-<p>128X64 Monochrome OLED/LCD</p>
-<p>1602 Monochrome 2 lines</p>
-<p>2004 Monochrome 4 lines</p>
-<p>Nokia-style Monochrome</p>
-<p>will be added.</p>
-<p>Made with CLion / Platformio.</p>
 <h3>Client for Android:</h3>
 
 https://github.com/RomanKryvolapov/LoraMessengerAndroidClient
@@ -77,6 +60,24 @@ https://github.com/RomanKryvolapov/LoraMessengerAndroidClient
 <h4>GetSettings (print all settings)</h4>
 <h4>ResetSettings (reset to default settings, saved settings are also erased)</h4>
 <h4>PrintCommands (Print all available commands)</h4>
+
+<h3>In the future:</h4>
+<p>- Protocol will be added for private messages, group chats.</p>
+<p>- Retranslation of messages, which will expand the coverage area (I do not want to use native Lora retranslation, because it is limited in capabilities).</p>
+<p>- Add support for modules with a SPI interface.</p>
+<p>- Connect a keyboard to board so that I can make a menu for settings and so that I can send messages without using a smartphone.</p>
+<p>- For the client for the board, support for OOP and universal classes will be added to work with different types of modules, displays and input devices, now the code for the board looks like Arduino-style code, but it will look like C++-style code.</p>
+<p>- Support for various screens:</p>
+<p>320x480 RGB</p>
+<p>320x240 RGB</p>
+<p>128x160 RGB</p>
+<p>204x204 RGB</p>
+<p>128X64 Monochrome OLED/LCD</p>
+<p>1602 Monochrome 2 lines</p>
+<p>2004 Monochrome 4 lines</p>
+<p>Nokia-style Monochrome</p>
+<p>will be added.</p>
+<p>Made with CLion / Platformio.</p>
 
 https://platformio.org/
 
