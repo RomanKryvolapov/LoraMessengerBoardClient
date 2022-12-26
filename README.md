@@ -66,21 +66,8 @@ https://github.com/RomanKryvolapov/LoraMessengerAndroidClient
 <p>- Retranslation of messages, which will expand the coverage area (I do not want to use native Lora retranslation, because it is limited in capabilities).</p>
 <p>- Connect a keyboard to board so that I can make a menu for settings and so that I can send messages without using a smartphone.</p>
 <p>- For the client for the board, support for OOP and universal classes will be added to work with different types of modules, displays and input devices, now the code for the board looks like Arduino-style code, but it will look like C++-style code.</p>
-<p>- Support for various screens:</p>
-<p>320x480 RGB</p>
-<p>320x240 RGB</p>
-<p>128x160 RGB</p>
-<p>204x204 RGB</p>
-<p>128X64 Monochrome OLED/LCD</p>
-<p>1602 Monochrome 2 lines</p>
-<p>2004 Monochrome 4 lines</p>
-<p>Nokia-style Monochrome</p>
-<p>will be added.</p>
-<p>- Module support:</p>
-<p>Ebyte E22 with SPI</p>
-<p>Ebyte E32</p>
-<p>Ebyte E200</p>
-<p>SX1276 SPI</p>
+<p>- Support for various screens: 320x480 RGB, 320x240 RGB, 128x160 RGB, 204x204 RGB, 128X64 Monochrome OLED/LCD, 1602 Monochrome 2 lines, 2004 Monochrome 4 lines, Nokia-style Monochrome will be added.</p>
+<p>- Module support: Ebyte E22 with SPI, Ebyte E32, Ebyte E200, SX1276 SPI.</p>
 
 <p>Made with CLion / Platformio.</p>
 
