@@ -70,7 +70,8 @@ https://github.com/RomanKryvolapov/LoraMessengerAndroidClient
 <p>- Module support: Ebyte E22 with SPI, Ebyte E32, Ebyte E200, SX1276 SPI.</p>
 <p>- Integration with Telegram bots.</p>
 <p>- Integration with GPS modules like NEO 6M/8M to send location and generate location links to google maps.</p>
-<p>- Integration with GSM module like SIM800L for messaging via SMS and GPRS/3G network
+<p>- Integration with GSM module like SIM800L for messaging via SMS and GPRS/3G network.</p>
+<p>- Monitor battery and power consumption, predict runtime and optimize power consumption.</p>
 
 <p>Made with CLion / Platformio.</p>
 
