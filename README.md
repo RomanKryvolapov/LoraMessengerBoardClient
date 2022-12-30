@@ -68,6 +68,9 @@ https://github.com/RomanKryvolapov/LoraMessengerAndroidClient
 <p>- For the client for the board, support for OOP and universal classes will be added to work with different types of modules, displays and input devices, now the code for the board looks like Arduino-style code, but it will look like C++-style code.</p>
 <p>- Support for various screens: 320x480 RGB, 320x240 RGB, 128x160 RGB, 204x204 RGB, 128X64 Monochrome OLED/LCD, 1602 Monochrome 2 lines, 2004 Monochrome 4 lines, Nokia-style Monochrome will be added.</p>
 <p>- Module support: Ebyte E22 with SPI, Ebyte E32, Ebyte E200, SX1276 SPI.</p>
+<p>- Integration with Telegram bots.</p>
+<p>- Integration with GPS modules like NEO 6M/8M to send location and generate location links to google maps.</p>
+<p>- Integration with GSM module like SIM800L for messaging via SMS and GPRS/3G network
 
 <p>Made with CLion / Platformio.</p>
 
